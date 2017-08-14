@@ -21,7 +21,7 @@ namespace ldl {
         c11::condition_variable cv;
 
         // mutex for cv.wait()
-        c11::mutex; mutex;
+        c11::mutex mutex;
 
         // flag indicating that promise set value (as opposed to being destroyed)
         bool value_set;
@@ -79,7 +79,8 @@ namespace ldl {
         Future& operator=(const Future&); // = delete;
 
         // only Promise objects can construct valid Future objects.
-        friend class Promise<T>;
+        template<typename U>
+        friend class Promise;
 
         // Construct an object that uses the specified shared state.
         Future(SharedState* shred_state_ptr);

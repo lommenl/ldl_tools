@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26228.12
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "heap_buffer", "heap_buffer.vcxproj", "{A2B22E16-AA06-42F8-95C3-E897A827D1AC}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ldl_tools", "ldl_tools.vcxproj", "{A2B22E16-AA06-42F8-95C3-E897A827D1AC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

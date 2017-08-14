@@ -11,6 +11,7 @@
 namespace c11 {
     using namespace std;
 }
+using namespace std::placeholders; // to match "using namespace std::placeholders;" in <functional>
 
 namespace ldl {
 
@@ -21,32 +22,39 @@ namespace ldl {
         // default constructor
         Pool();
 
-        // construct object that holds blocks of nbytes bytes.
-        Pool(size_t nbytes);
+        // construct object that holds nbyte sized blocks.
+        Pool(size_t nbytes, int growth_step);
 
         // destructor
         ~Pool();
 
-        // swap state with other (needed to insert a non-copyable object into a standard container)
+        // swap state with other.
+        // (needed to insert a non-copyable object into a standard container)
         void swap(Pool& other);
 
-        /// increase size of stack_ to new_capacity elements of nbytes each.
+        // return the maximum capacity of the pool (NOT the number of blocks it currently contains.)
+        size_t size();
+
+        /// increase size of stack_ to hold new_capacity blocks of nbytes each.
         void resize(size_t new_capacity);
 
-        /// set number of nbyte blocks to add to stack_ if it becomes empty.
-        /// setting this to 0 disables growth of this pool.
-        void SetGrowthStep(size_t blocks);
+        /// Set number of nbyte blocks to add to stack_ if it becomes empty.
+        // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
+        // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
+        // setting growth_step = 0 disables automatic growth of the pool.
+        void SetGrowthStep(int growth_step);
 
-        /// Return the current value of growth_step. (in blocks)
-        size_t GetGrowthStep();
+        /// Return the current value of growth_step.
+        int GetGrowthStep();
 
-        // Pop a pointer to a single nbytes_ sized block off of stack_. 
-        // If stack is empty and growth_step>0, call resize() to add growth_step more blocks.
-        // otherwise throw an exception.
+        // Pop a pointer to a single nbytes sized block off of stack_. 
+        // If stack is empty and growth_step!=0, call resize() to add more blocks according to the value of growth_step.
+        // If stack is empty and growth_step==0, throw an exception.
         void* allocate();
 
         // Push a block pointer onto stack_.
-        // If stack is full and growth_step == 0, throw an exception.
+        // If stack is full and growth_step != 0, increase the size of stack_ by 1.
+        // If stack is full and growth_step==0, throw an exception.
         void deallocate(void* ptr);
 
     private:
@@ -54,7 +62,7 @@ namespace ldl {
         Pool(const Pool&); // = delete;
         Pool& operator=(const Pool&); // = delete;
 
-        // resize stack_ without locking mutex (assume it's already locked)
+        // Resize stack_ without locking mutex (assume it's already locked)
         void NoLockResize(size_t new_cap);
 
         //----
@@ -64,15 +72,15 @@ namespace ldl {
         c11::shared_ptr<c11::mutex> mutex_ptr_;
 
         // number of bytes in each block
-        const size_t nbytes_;
+        size_t nbytes_;
 
-        // number of valid unallocated pointers in stack_;
+        // number of unallocated (valid) block pointers in stack_;
         size_t size_;
 
-        // number of blocks to add to stack_ if it becomes empty.
-        size_t growth_step_;
+        // description of number of blocks to add to stack_ if it becomes empty.
+        int growth_step_;
 
-        // stack of pointers to allocated nbytes_ size memory blocks
+        // stack of pointers to allocated nbytes_ sized memory blocks
         std::vector<void*> stack_;
 
     }; // Pool
@@ -80,41 +88,48 @@ namespace ldl {
     //---------------------------------
     // all static base class for PoolAllocator objects
     class PoolList {
-    public:
-        /// Return a reference to pool_list[nbytes], which contains nbytes sized blocks
-        static Pool& GetPool(size_t nbytes);
+    protected:
+        // Set the number of blocks to add to pool_list[pool_num] if it becomes empty.
+        // using pool_num = 0 sets the growth_step value for all current and future pools.
+        // Otherwise only the value fo pool_list[pool_num] is set.
+        // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
+        // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
+        // setting growth_step = 0 disables automatic growth of a pool.
+        static void SetGrowthStep(size_t pool_num, int growth_step);
 
-        // Set the number of blocks to add to pool_list[nbytes] if it becomes empty.
-        // nbytes = 0 sets the growth_step value for all current and future pools to the specified value.
-        // Setting nblocks = 0 disables pool growth.
-        static void SetGrowthStep(size_t nblocks, size_t nbytes = 0);
+        // Return the number of blocks that will be added to pool_list[pool_num] if it becomes empty.
+        // setting pool_num=0 returns the default value that will be assigned to new pools when they are created.
+        static int GetGrowthStep(size_t pool_num);
 
-        // Return the number of blocks that will be added to pool_list[nbytes] if it becomes empty.
-        // nbytes=0 returns the default value assigned to new pools when they are created.
-        static size_t GetGrowthStep(size_t nbytes = 0 );
+        /// Set the size of pool_list[pool_num] to hold new_capacity blocks.
+        static void ResizePool(size_t pool_num, size_t new_capacity);
 
-        /// Set the size of the pool that holds nbytes sized blocks to new_capacity blocks.
-        static void ResizePool(size_t nbytes, size_t new_capacity);
+        // return size of pool_list(n)
+        static size_t GetPoolSize(size_t pool_num);
+
+        /// Return a reference to pool_list[pool_num]
+        static Pool& GetPool(size_t pool_num);
 
     private:
-
-        //maximum value of nbytes allowed in pool_list
-        static const size_t MAX_NBYTES = static_cast<size_t>(1E9);
 
         // struct declaring static member variables.
         // Declaring these inside a struct lets us also declare a constructor function to initialize them at program start,
         // and a destructor function to destroy them at program shutdown, which the regular class destructor can't do.
         struct Statics {
+
+            //maximum value of pool_num allowed in pool_list
+            const size_t MAX_POOLS = static_cast<size_t>(1E9);
+
             // mutex for thread safety
             c11::mutex mutex;
 
-            // default value of growth_step_ for all pools (in in blocks)
-            static size_t default_growth_step;
+            // default value of growth_step_ for all pools
+             int default_growth_step;
 
-            // Type defining a map of multiple Pool objects keyed by their nbytes_ value. 
+            // Type defining a map of multiple Pool objects keyed by their pool_num value. 
             typedef std::map<size_t, Pool> PoolList;
 
-            // A map of multiple Pool objects keyed by their nbytes_ value.
+            // A map of multiple Pool objects keyed by their pool_num value.
             PoolList pool_list;
 
             // default constructor (called at program start)
@@ -133,7 +148,7 @@ namespace ldl {
     /// Can be used in place of std::allocator as an allocator for STL container classes and other classes like shared_ptr,
     /// which allocate memory internally.
     template<typename T>
-    class PoolAllocator : protected PoolList {
+    class PoolAllocator : public PoolList {
     public:
         typedef T value_type;
 
@@ -153,13 +168,17 @@ namespace ldl {
 
         //-----
 
-        //PoolAllocator() = default;
+        // Default Constructor
+        PoolAllocator() {} // = default;
 
-        // PoolAllocator(const PoolAllocator& other) = default;
+        // Copy Constructor
+        PoolAllocator(const PoolAllocator&) {} // = default;
 
-        //~PoolAllocator() = default;
+        // Destructor
+        ~PoolAllocator() {} // = default;
 
-        // PoolAllocator& operator=(const PoolAllocator& other) = default;
+        // Copy asignment operator
+        PoolAllocator& operator=(const PoolAllocator&) {} // = default;
 
         // Copy constructor from PoolAllocator<U>
         template<typename U>
@@ -197,27 +216,67 @@ namespace ldl {
 
         //----
 
-        // duplicate "new T()" and "new T[n]();"
-        T* New(size_t n = 1);
+        static void SetGrowthStep(int growth_step, size_t n = 0 );
 
-        // duplicate "new T(a1)" and simulate something equivalent to "new T[n](a1)"
+        static int GetGrowthStep(size_t n = 0);
+
+        static void ResizePool(size_t new_capacity, size_t n = 1);
+        
+        static size_t GetPoolSize(size_t n = 1);
+
+        // static version of allocate()
+        static T* Allocate(size_t n);
+
+        // static version of deallocate()
+        static void Deallocate(T* ptr, size_t n);
+
+        // duplicate "new T()"
+        static T* New();
+
+        // duplicate "new T[n]();"
+        static T* NewArray(size_t n);
+
+        // duplicate "new T(a1)"
         template<typename A1>
-        T* New(A1 a1, size_t n = 1);
+        static T* New(A1 a1);
 
-        // duplicate "new T(a1,a2)" and simulate something equivalent to "new T[n](a1,a2)"
+        // duplicate "new T[n](a1)" (which doesn't really exist)
+        template<typename A1>
+        static T* NewArray(size_t n, A1 a1);
+
+        // duplicate "new T(a1,a2)" 
         template<typename A1, typename A2>
-        T* New(A1 a1, A2 a2, size_t n = 1);
+        static T* New(A1 a1, A2 a2);
 
-        // duplicate "new T(a1,a2,a3)" and simulate something equivalent to "new T[n](a1,a2,a3)"
+        // duplicate "new T[n](a1,a2)"  (which doesn't really exist)
+        template<typename A1, typename A2>
+        static T* NewArray(size_t n, A1 a1, A2 a2);
+
+        // duplicate "new T(a1,a2,a3)"
         template<typename A1, typename A2, typename A3>
-        T* New(A1 a1, A2 a2, A3 a3, size_t n = 1);
+        static T* New(A1 a1, A2 a2, A3 a3);
 
-        // duplicate delete ptr; and sort of duplicate delete[] ptr;
-        void Delete(T* ptr, size_t n = 1);
+        // duplicate "new T[n](a1,a2,a3)" (which doesn't really exist)
+        template<typename A1, typename A2, typename A3>
+        static T* NewArray(size_t n, A1 a1, A2 a2, A3 a3);
 
-        // Return a function object that will call this->Delete(ptr,n);
-        // This object can be used as a Deleter argument in a shared_ptr constructor.
-        c11::function<void(T*)> GetDeleter(size_t n = 1);
+        // duplicate "delete ptr"
+        // This static function can be used as a Deleter argument in a shared_ptr constructor.
+        // specify as 'ldl::PoolAllocator<T>::Delete';
+        static void Delete(T* ptr);
+
+        // return a pointer to Delete(T* ptr);
+        // The returned object can be used as a Deleter argument in a shared_ptr constructor.
+        static c11::function<void(T*)> GetDeleter();
+
+        // sort of duplicate "delete[] ptr"
+        // specifying a value of n different than the value used in
+        // NewArray() will cause things to catch on fire.
+        static void DeleteArray(size_t n, T* ptr);
+
+        // Return a function object that will call this->Delete(n,ptr);
+        // the returned object can be used as a Deleter argument in a shared_ptr constructor.
+        static c11::function<void(T*)> GetArrayDeleter(size_t n = 1);
 
     };
 
@@ -230,7 +289,7 @@ namespace ldl {
     bool operator!=(const PoolAllocator<T>& lhs, const PoolAllocator<U>& rhs);
 
     //-----------------------
-    // instantiation for PoolAllocator<void>
+    // instantiation of class PoolAllocator<void>
     template <> class PoolAllocator<void> {
     public:
         typedef void* pointer;

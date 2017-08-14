@@ -1,10 +1,11 @@
 #include <iostream>
 
 #include "shared_pointer.h"
+#include "pool_allocator.h"
+#include "future.h"
 
-//#include "pool_allocator.h"
-
-int main() {
+//-------------------------------------------
+void shared_ptr_test() {
 
     c11::mutex mx;
 
@@ -105,7 +106,6 @@ int main() {
 
         // -----
         // swap
-
         s1.swap(s3);
         std::cout << "s1.swap(s3);" << std::endl;
 
@@ -126,6 +126,7 @@ int main() {
         std::cout << "(bool)s3=" << (bool)s3 << std::endl;
         std::cout << "s3.get() = " << s3.get() << std::endl;
 
+        // -----
         //auto delete
         {
             std::cout << "entering block" << std::endl;
@@ -158,8 +159,8 @@ int main() {
         std::cout << "s1 = " << s1 << std::endl;
         std::cout << "*s1 = " << *s1 << std::endl;
 
-
-        // todo:
+        // -----
+        // TODO:
         // SharedPointer(ptr,mx)
         // SharedPointer(ptr,del)
         // SharedPointer(ptr,del,mx)
@@ -167,52 +168,74 @@ int main() {
         // reset(ptr,mx)
         // reset(ptr,del)
         // reset(ptr,del,mx)
-        // Constructors and reset() with mutex
-        // Constructors and reset() with Deleter and mutex
         // operator->()
         //----
         // swap(lhs,rhs)
-        // comparison operators
-
-        
+        // operator==(lhs,rhs);
+        // operator!=(lhs,rhs);
+        // operator<(lhs,rhs);
+        // operator>(lhs,rhs);
+        // operator<=(lhs,rhs);
+        // operator=>(lhs,rhs);
 
         std::cout << "done" << std::endl;
 
     }
     catch (const std::exception& ex) {
-        std::cout << ex.what() << std::endl;
+        std::cout << "exception in shared_ptr_test: " << ex.what() << std::endl;
     }
+}
 
+//-------------------------------------------
+void pool_allocator_test() {
 
-#if 0
-    // Pool with 2 elements
-    PoolAllocator<int>::Pool(1).reserve(2);
+    try {
+        // initialize 4-byte pool with 1 element
+        ldl::PoolAllocator<int>::ResizePool(1);
 
-    if (1) {
         // allocate 1st element
-        boost::shared_ptr<int> sp1 = PoolSharedPtr<int>();
+        int* p1 = ldl::PoolAllocator<int>().New();
+        std::cout << "p1 = " << p1 << std::endl;
+        std::cout << "*p1 = " << *p1 << std::endl;
 
-        std::cout << "p1 = " << sp1.get() << std::endl;
-    } // free 1st element
+        // allocate 2nd element from 4-byte pool (causes pool to resize)
+        short* p2 = ldl::PoolAllocator<short>().NewArray(2,3);
+        std::cout << "p2 = " << p2 << std::endl;
+        std::cout << "*p2 = " << *p2 << std::endl;
 
-    // allocate 2nd element
-    int* p2 = PoolAllocator<int>::Pool(1).New();
-    std::cout << "p2 = " << p2 << std::endl;
+        //delete 1st element
+        ldl::PoolAllocator<int>::Delete(p1);
 
-    // re-use 1st element
-    int* p3 = PoolAllocator<int>::Pool(1).New();
+        // allocate 3rd element from 4-byte pool (re-use memory from p1)
+        int* p3 = ldl::PoolAllocator<int>::New(11);
+        std::cout << "p3 = " << p3 << std::endl;
+        std::cout << "*p3 = " << *p3 << std::endl;
 
-    std::cout << "p3 = " << p3 << std::endl;
+        ldl::PoolAllocator<int>::Delete(p3);
+        ldl::PoolAllocator<short>::DeleteArray(2,p2);
 
-    PoolAllocator<int>::Pool(1).Delete(p2);
-    PoolAllocator<int>::Pool(1).Delete(p3);
+    }
+    catch (const std::exception& ex) {
+        std::cout << "exception in pool_allocator_test: " << ex.what() << std::endl;
+    }
+}
 
-    //-----
 
+//-------------------------------------------
+void future_test()
+{
+    try {
+        //FIXME
+    }
+    catch (const std::exception& ex) {
+        std::cout << "exception in future-test: " << ex.what() << std::endl;
+    }
+}
 
-
-    //-----
-#endif //FOOXXX
-
+//-------------------------------------------
+int main() {
+    shared_ptr_test();
+    pool_allocator_test();
+    future_test();
     return 0;
 }

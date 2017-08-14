@@ -1,7 +1,10 @@
 #include "pool_allocator.h"
+
+#include <iostream>
 #include <exception>
 #include <memory> //std::allocator
-#include <cstdint> //int8_t
+#include <cstdint> //std::uint8_t
+#include <algorithm> // std::max
 
 namespace ldl {
 
@@ -14,12 +17,16 @@ namespace ldl {
     {}
 
     //--------------
-    Pool::Pool(size_t n)
+    Pool::Pool(size_t nbytes, int growth_step)
         : mutex_ptr_(new c11::mutex())
-        , nbytes_(n)
+        , nbytes_(nbytes)
         , size_(0)
-        , growth_step_(0)
-    {}
+        , growth_step_(growth_step)
+    {
+        if (nbytes == 0 ) {
+            throw std::runtime_error("invalid nbytes argument");
+        }
+    }
 
     //--------------
     Pool::~Pool()
@@ -27,7 +34,7 @@ namespace ldl {
         if (mutex_ptr_) { // object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
             for (size_t ix = 0; ix < size_; ++ix) {
-                std::allocator<std::int8_t>().deallocate(stack_[ix], nbytes_);
+                std::allocator<c11::uint8_t>().deallocate(static_cast<c11::uint8_t*>(stack_[ix]), nbytes_);
             }
         }
     }
@@ -35,7 +42,6 @@ namespace ldl {
     //-----------------
     void Pool::swap(Pool& other)
     {
-        //FIXME
         if (this != &other) {
             if (mutex_ptr_) {
                 mutex_ptr_->lock();
@@ -58,6 +64,17 @@ namespace ldl {
     }
 
     //-----------------
+    size_t Pool::size()
+    {
+        size_t retval = 0;
+        if (mutex_ptr_) { //object is valid
+            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
+            retval = stack_.size();
+        }
+        return retval;
+    }
+
+    //-----------------
     void Pool::resize(size_t new_capacity)
     {
         if (mutex_ptr_) { //object is valid
@@ -67,18 +84,18 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::SetGrowthStep(size_t nblocks)
+    void Pool::SetGrowthStep(int growth_step)
     {
         if (mutex_ptr_) { // object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            growth_step_ = nblocks;
+            growth_step_ = growth_step;
         }
     }
 
     //-----------------
-    size_t Pool::GetGrowthStep()
+    int Pool::GetGrowthStep()
     {
-        size_t retval = 0;
+        int retval = 0;
         if (mutex_ptr_) { // object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
             retval = growth_step_;
@@ -93,12 +110,15 @@ namespace ldl {
         if (mutex_ptr_) { // object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
             if (size_ == 0) { //if stack is empty
-                if (growth_step_ > 0) {
+                if (growth_step_ > 0) { // growth_step is an increment
                     //  add growth_step_ elements to stack_
-                    NoLockResize(stack_.size() + growth_step_);
+                    NoLockResize(stack_.size() + static_cast<size_t>(growth_step_));
                 }
-                else { // no growth allowed
-                    throw std::runtime_error("stack_ is empty and growth_step_ = 0");
+                else if (growth_step_ < 0) { // growth step is negative inverse of a scale factor. (e.g. -3 = a scale factor of 1/3
+                    NoLockResize(stack_.size() + std::max<size_t>(1, stack_.size()/static_cast<size_t>(-growth_step_)));
+                }
+                else { // growth_step == 0 // no growth allowed
+                    throw std::runtime_error("pool is empty and growth_step_ = 0");
                 }
             }
             retval = stack_[--size_]; // get ptr from front of stack
@@ -129,65 +149,76 @@ namespace ldl {
         }
         stack_.resize(new_capacity);
         for (size_t ix = old_capacity; ix < new_capacity; ++ix) {
-            // allocate raw memory from the heap for each new element.
-            stack_[ix] = std::allocator<std::int8_t>(nbytes_);
+            // for each new element allocate raw memory from the heap and push it onto the stack
+            stack_[size_++] = static_cast<void*>(std::allocator<c11::uint8_t*>().allocate(nbytes_));
         }
 #ifdef _DEBUG
-        std::cout << "called std::allocator<int8_t>().allocate(" << nbytes_
-            << ") " << (new_capacity - old_capacity) << " times" << std::endl;
+        std::cout << "called std::allocator<uint8_t>().allocate(" << nbytes_ << ") "
+            << (new_capacity - old_capacity) << " times" << std::endl;
 #endif
     }
 
     //--------------
-    Pool& PoolList::GetPool(size_t nbytes)
+    Pool& PoolList::GetPool(size_t pool_num)
     {
+        if (pool_num == 0 || pool_num > s.MAX_POOLS ) {
+            throw std::runtime_error("Invalid pool_num argument");
+        }
         //lock while accessing s
         c11::lock_guard<c11::mutex> lock(s.mutex);
-        if (s.pool_list.count(nbytes) == 0) {
-            // construct a correctly initialized Pool object and swap it with the empty object in s.pool_list
-            Pool(nbytes).swap(s.pool_list[n]);
-            // set initial growth step to default.
-            s.pool_list[n].SetGrowthStep(s.default_growth_step);
+        if (s.pool_list.count(pool_num) == 0) {
+            // construct a Pool object with nbytes=pool_num and swap it into s.pool_list
+            s.pool_list[pool_num].swap(Pool(pool_num,s.default_growth_step));
         }
-        return s.pool_list[nbytes];
+        return s.pool_list[pool_num];
     }
 
     //--------------
-    void PoolList::SetGrowthStep(size_t nblocks, size_t nbytes = 0)
+    void PoolList::SetGrowthStep(size_t pool_num, int growth_step)
     {
         //lock while accessing s
         c11::lock_guard<c11::mutex> lock(s.mutex);
-        if (n == 0) { // set default, and all pools
-            s.default_growth_step = nblocks;
+        if (pool_num == 0) { // set default, and all pools
+            s.default_growth_step = growth_step;
             for (Statics::PoolList::iterator it = s.pool_list.begin(); it != s.pool_list.end(); ++it) {
-                it->second.SetGrowthStep(nblocks);
+                it->second.SetGrowthStep(growth_step);
             }
         }
-        else { //set only pool n
-            GetPool(n).SetGrowthStep(nblocks);
+        else { //set only pool_list[pool_num]
+            GetPool(pool_num).SetGrowthStep(growth_step); // may create the pool
         }
     }
 
     //--------------
-    size_t PoolList::GetGrowthStep(size_t nbytes = 0 )
+    int PoolList::GetGrowthStep(size_t pool_num)
     {
         //lock while accessing s
         c11::lock_guard<c11::mutex> lock(s.mutex);
-        size_t retval = s.default_growth_step;
-        if (nbytes != 0 && s.pool_list.count(nbytes)) { // only get value if pool already exists
-            retval = GetPool(nbytes).GetGrowthStep();
+        int retval = s.default_growth_step;
+        if (s.pool_list.count(pool_num)) { // don't create a pool if it doesn't exist
+            retval = GetPool(pool_num).GetGrowthStep();
         }
         return retval;
     }
 
     //--------------
-    void PoolList::ResizePool(size_t nbytes, size_t new_capacity)
+    void PoolList::ResizePool(size_t pool_num, size_t new_capacity)
     {
-        GetPool(nbytes).resize(new_capacity);
+        GetPool(pool_num).resize(new_capacity); // may create the pool
     }
 
     //--------------
-    PoolList::Statics s;
+    size_t PoolList::GetPoolSize(size_t pool_num)
+    {
+        size_t retval = 0;
+        if (s.pool_list.count(pool_num)) { // dont create a pool if it doesn't exist
+            retval = GetPool(pool_num).size();
+        }
+        return retval;
+    }
+
+    //--------------
+    PoolList::Statics PoolList::s;
 
     //---------------
     PoolList::Statics::Statics()

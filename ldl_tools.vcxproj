@@ -22,7 +22,7 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{A2B22E16-AA06-42F8-95C3-E897A827D1AC}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
-    <RootNamespace>heap_buffer</RootNamespace>
+    <RootNamespace>ldl_tools</RootNamespace>
     <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
