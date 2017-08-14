@@ -15,7 +15,7 @@ namespace ldl {
     // Class that defines the state shared between a Promise object and a Future object.
     // These objects can be statically allocated and re-used.
     template<typename T>
-    struct SharedState {
+    struct FutureState {
 
         // synchronization condition_variable
         c11::condition_variable cv;
@@ -23,7 +23,9 @@ namespace ldl {
         // mutex for cv.wait()
         c11::mutex mutex;
 
-        // flag indicating that promise set value (as opposed to being destroyed)
+        bool notified;
+
+        // flag indicating that promise has set value (or is being destroyed).
         bool value_set;
 
         // shared value
@@ -31,6 +33,7 @@ namespace ldl {
     };
 
     //-------------
+    // return type for Future::wait_for() and Future::wait_until()
     struct FutureStatus {
         enum type {
             timeout,
@@ -39,38 +42,43 @@ namespace ldl {
     };
 
     //-------------
-    /// A class that will receive a shared value from a promise object.
+    /// A class that can block execution until it receives a shared value set by a Promise object.
     template<typename T>
     class Future {
     public:
 
-        // construct an empty future object.
+        // construct an empty object (no shared state).
         Future();
 
-        // swap states of this with other.
+        // allows us to move-assign and move-construct Future objects with a pre-C11 compiler.
         void swap(Future& other);
 
-        // Return true if this future has a shared state.
+        // Return true if this object has a shared state.
         bool valid() const;
 
-        // call wait() and then return the value set by the Promise object.
-        // If the Promise this object is sharing state with is destroyed before setting value,
-        // behavior is undefined.
+        // call wait() and then return the value set by the Promise that shares state with object.
+        // If the Promise object is destroyed before setting value, behavior is undefined.
+        // Calling when this object is invalid results in undefined behavior.
         T get();
 
-        // Wait until the promise object unlocks the shared mutex.
-        // Calling with an invalid future results in undefined behavior.
+        // Wait until the promise object that shares state with this object sets value and notifies the shared condition variable.
+        // Calling when this object is invalid results in undefined behavior.
         void wait();
 
-        // Wait until the promise object unlocks the shared mutex or until the specified time_point.
-        // Calling with an invalid future results in undefined behavior.
+        // Wait until the promise that shares state with this object sets value and notifies the shared condition variable,
+        // or until the specified time_point is reached.
+        // Calling when this object is invalid results in undefined behavior.
         template<typename Clock, typename Duration>
         FutureStatus::type wait_until(const c11::chrono::time_point<Clock, Duration >& abs_time);
 
-        // wait until the promise object unlocks the shared mutex or the specified duration elapses.
-        // Calling with an invalid future results in undefined behavior.
+        // Wait until the promise that shares state with this object sets value and notifies the shared condition variable,
+        // or until the specified duration elapses.
+        // Calling when this object is invalid results in undefined behavior.
         template< typename Rep, typename Period>
         FutureStatus::type wait_for(const c11::chrono::duration<Rep, Period>& rel_time);
+
+        // get state_ptr so it can be re-used.
+        FutureState<T>* GetFutureState() const;
 
     private:
 
@@ -82,16 +90,14 @@ namespace ldl {
         template<typename U>
         friend class Promise;
 
-        // Construct an object that uses the specified shared state.
-        Future(SharedState* shred_state_ptr);
+        // Construct an object with the specified shared state.
+        Future(FutureState<T>* state_ptr);
 
         //---
 
-        SharedState* shred_state_ptr_;
+        FutureState<T>* state_ptr_;
 
     };
-
-
 
     //-------------
     template<typename T>
@@ -99,22 +105,23 @@ namespace ldl {
 
     public:
 
-        // default consructor
+        // default consructor (no shared state)
         Promise();
 
-        // construct a Promise that uses the specified SharedState object.
-        Promise(SharedState* shared_state_ptr);
+        // construct an object with the specified shared state.
+        Promise(FutureState<T>* state_ptr);
 
         // destroy a promise object
         ~Promise();
 
         // swap states of two objects.
+        // allows us to move-assign and move-construct Future objects with a pre-C11 compiler.
         void swap(Promise& other);
 
-        // construct a Future object that shares state with this promise.
+        // construct a Future object with the same shared state as this object.
         Future<T> get_future();
 
-        // set the value of the shared state.
+        // set the value of the shared state and notify the shared condition variable.
         void set_value(const T& value);
 
     private:
@@ -124,11 +131,14 @@ namespace ldl {
 
         //---
 
-        SharedState* shared_state_ptr_;
+        FutureState<T>* state_ptr_;
 
-        bool future_exists_;
+        // true if a Future object with the same shared state as this object has been constructed.
+        bool future_constructed_;
     };
 
 } //namespace ldl
+
+#include "future.hpp"
 
 #endif //!PROMISE_FUTURE_H_

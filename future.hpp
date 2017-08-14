@@ -1,31 +1,35 @@
 #include "future.h"
 
 #include <exception>
+#include <algorithm> //swap
+#include <mutex> //unique_lock
 
 namespace ldl {
 
     //---------------
     template<typename T>
     Future<T>::Future()
-        : shared_state_ptr_(0)
+        : state_ptr_(0)
     {}
 
     //---------------
     template<typename T>
-    Future<T>::Future(SharedState* shared_state_ptr)
-        : shared_state_ptr_(shared_state_ptr)
+    Future<T>::Future(FutureState<T>* state_ptr)
+        : state_ptr_(state_ptr)
     {}
 
     //---------------
     template<typename T>
     void Future<T>::swap(Future& other) {
-        std::swap(shared_state_ptr_, other.shared_state_ptr_);
+        if (this != &other) {
+            std::swap(state_ptr_, other.state_ptr_);
+        }
     }
 
     //---------------
     template<typename T>
     bool Future<T>::valid() const {
-        return  (shared_state_ptr_ != 0);
+        return  (state_ptr_ != 0);
     }
 
     //---------------
@@ -33,7 +37,7 @@ namespace ldl {
     T Future<T>::get()
     {
         wait();
-        return shared_state_ptr_->value;
+        return state_ptr_->value;
     }
 
     //---------------
@@ -43,9 +47,9 @@ namespace ldl {
         if (!valid()) {
             throw std::runtime_error("future is not valid");
         }
-        std::unique_lock<std::mutex> lck(shared_state_ptr_->mutex_ptr_);
-        while (!shared_state_ptr_->ready) { //ignore spurious wake-ups
-            shared_state_ptr_->cv.wait(lck);
+        c11::unique_lock<c11::mutex> lock(state_ptr_->mutex);
+        while (!state_ptr_->notified) { //ignore spurious wake-ups
+            state_ptr_->cv.wait(lock);
         }
     }
 
@@ -54,18 +58,16 @@ namespace ldl {
     template<typename Clock, typename Duration>
     FutureStatus::type Future<T>::wait_until(const c11::chrono::time_point<Clock, Duration >& abs_time)
     {
-        FutureStatus::type retval = FutureStatus::timeout;
+        FutureStatus::type retval = FutureStatus::ready;
         if (!valid()) {
             throw std::runtime_error("future is not valid");
         }
-        std::unique_lock<std::mutex> lck(shared_state_ptr_->mutex_ptr_);
-        while (!shared_state_ptr_->ready) { //ignore spurious wake-ups
-            if (shared_state_ptr_->cv.wait_until(lck, abs_time) == std::cv_status::timeout) {
-                break; // timed out, stop waiting
+        c11::unique_lock<c11::mutex> lock(state_ptr_->mutex);
+        while (!state_ptr_->notified) { //ignore spurious wake-ups
+            if (state_ptr_->cv.wait_until(lock, abs_time) == c11::cv_status::timeout) {
+                retval = FutureStatus::timeout;
+                break; //stop waiting
             }
-        }
-        if (shared_state_ptr_->ready) {
-            retval = FutureStatus::ready;
         }
         return retval;
     }
@@ -75,36 +77,44 @@ namespace ldl {
     template< typename Rep, typename Period>
     FutureStatus::type Future<T>::wait_for(const c11::chrono::duration<Rep, Period>& rel_time) 
     {
-        return wait_until(std::chrono::steady_clock::now() + rel_time);
+        return wait_until(c11::chrono::steady_clock::now() + rel_time);
+    }
+
+    //---------------
+    template<typename T>
+    FutureState<T>* Future<T>::GetFutureState() const
+    {
+        return state_ptr_;
     }
 
     //---------------
     template<typename T>
     Promise<T>::Promise()
-        : shared_state_ptr_(0)
-        , future_exists_(false)
+        : state_ptr_(0)
+        , future_constructed_(false)
     {}
 
     //---------------
     template<typename T>
-    Promise<T>::Promise(SharedState* shared_state_ptr)
-        : shared_state_ptr_(shared_state_ptr)
-        , future_exists_(false)
+    Promise<T>::Promise(FutureState<T>* state_ptr)
+        : state_ptr_(state_ptr)
+        , future_constructed_(false)
     {
-        if (!shared_state_ptr_) {
-            throw std::runtime_error("invalid shared_state_ptr");
+        if (!state_ptr_) {
+            throw std::runtime_error("invalid state_ptr");
         }
-        shared_state_ptr_->ready = false;
+        state_ptr_->value_set = false;
+        state_ptr_->notified = false;
     }
 
     //---------------
     template<typename T>
     Promise<T>::~Promise()
     {
-        if (shared_state_ptr_ ) {
-            // Unblock Future if it is waiting.
-            shared_state_ptr_->ready = true;
-            shared_state_ptr_->cv.notify_one();
+        if (state_ptr_ ) {
+            // notify cv in case Future object is waiting.
+            state_ptr_->notified = true;
+            state_ptr_->cv.notify_one();
         }
     }
 
@@ -112,32 +122,35 @@ namespace ldl {
     template<typename T>
     void Promise<T>::swap(Promise& other)
     {
-        std::swap(shared_state_ptr_, other.shared_state_ptr_);
-        std::swap(future_exists_, other.future_exists_);
+        if (this != &other) {
+            std::swap(state_ptr_, other.state_ptr_);
+            std::swap(future_constructed_, other.future_constructed_);
+        }
     }
 
     //---------------
     template<typename T>
     Future<T> Promise<T>::get_future()
     {
-        // if no shared state, or future already exists
-        if (!shared_state_ptr_ || future_exists_) {
+        // if no shared state, or future already constructed
+        if (!state_ptr_ || future_constructed_) {
             throw std::runtime_error("Can't construct Future object");
         }
-        future_exists_ = true;
-        return Future<T>(shared_state_ptr_);
+        future_constructed_ = true;
+        return Future<T>(state_ptr_);
     }
 
     //---------------
     template<typename T>
     void Promise<T>::set_value(const T& value) {
         // if no shared state, or value already set
-        if (!shared_state_ptr_ || shared_state_ptr_->ready) {
-            Throw std::runtime_error("Promise can't set value");
+        if (!state_ptr_ || state_ptr_->value_set) {
+            throw std::runtime_error("Promise can't set value");
         }
-        shared_state_ptr_->value = value;
-        shared_state_ptr_->ready = true;
-        shared_state_ptr_->cv.notify_one();
+        state_ptr_->value = value;
+        state_ptr_->value_set = true;
+        state_ptr_->notified = true;
+        state_ptr_->cv.notify_one();
     }
 
 } //namespace ldl

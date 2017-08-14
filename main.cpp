@@ -4,8 +4,15 @@
 #include "pool_allocator.h"
 #include "future.h"
 
+#include <thread>
+#include <functional>
+
 //-------------------------------------------
 void shared_ptr_test() {
+
+    std::cout << "========================" << std::endl;
+    std::cout << "Starting shared_ptr_test" << std::endl;
+    std::cout << "========================" << std::endl;
 
     c11::mutex mx;
 
@@ -189,6 +196,10 @@ void shared_ptr_test() {
 //-------------------------------------------
 void pool_allocator_test() {
 
+    std::cout << "============================" << std::endl;
+    std::cout << "Starting pool_allocator_test" << std::endl;
+    std::cout << "============================" << std::endl;
+
     try {
         // initialize 4-byte pool with 1 element
         ldl::PoolAllocator<int>::ResizePool(1);
@@ -222,10 +233,49 @@ void pool_allocator_test() {
 
 
 //-------------------------------------------
+
+void promise_thread(ldl::Promise<int>* prom, int val ) {
+    c11::this_thread::sleep_for(std::chrono::seconds(2));
+    prom->set_value(val);
+}
+
 void future_test()
 {
+    std::cout << "============================" << std::endl;
+    std::cout << "Starting future_test" << std::endl;
+    std::cout << "============================" << std::endl;
+
     try {
-        //FIXME
+
+        ldl::FutureState<int> state;
+
+        ldl::Promise<int> prom(&state);
+
+        ldl::Future<int> fut;
+        fut.swap(prom.get_future()); // move assignment
+
+        // spawn thread
+        c11::thread th(c11::bind(promise_thread, &prom,1));
+
+        int val = fut.get();
+
+        std::cout << "val = " << val << std::endl;
+
+        th.join();
+
+        //repeat
+        ldl::Promise<int> prom2(&state);
+
+        ldl::Future<int> fut2;
+        fut2.swap(prom2.get_future()); // move assignment
+
+        c11::thread th2(c11::bind(promise_thread, &prom2,2));
+
+        int val2 = fut2.get();
+
+        std::cout << "val2 = " << val2 << std::endl;
+
+        th2.join();
     }
     catch (const std::exception& ex) {
         std::cout << "exception in future-test: " << ex.what() << std::endl;
