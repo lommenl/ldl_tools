@@ -36,6 +36,10 @@ namespace ldl {
             for (size_t ix = 0; ix < size_; ++ix) {
                 std::allocator<c11::uint8_t>().deallocate(static_cast<c11::uint8_t*>(stack_[ix]), nbytes_);
             }
+#ifdef _DEBUG
+        std::cout << "called std::allocator<uint8_t>().deallocate(ptr," << nbytes_ << ") "
+            << size_ << " times" << std::endl;
+#endif
         }
     }
 
@@ -75,7 +79,7 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::resize(size_t new_capacity)
+    void Pool::Resize(size_t new_capacity)
     {
         if (mutex_ptr_) { //object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
@@ -104,7 +108,7 @@ namespace ldl {
     }
 
     //-----------------
-    void* Pool::allocate()
+    void* Pool::Pop()
     {
         void* retval = 0;
         if (mutex_ptr_) { // object is valid
@@ -127,7 +131,7 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::deallocate(void* ptr)
+    void Pool::Push(void* ptr)
     {
         if (mutex_ptr_) { // object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
@@ -204,7 +208,7 @@ namespace ldl {
     //--------------
     void PoolList::ResizePool(size_t pool_num, size_t new_capacity)
     {
-        GetPool(pool_num).resize(new_capacity); // may create the pool
+        GetPool(pool_num).Resize(new_capacity); // may create the pool
     }
 
     //--------------
@@ -215,6 +219,18 @@ namespace ldl {
             retval = GetPool(pool_num).size();
         }
         return retval;
+    }
+
+    //--------------
+    void* PoolList::Pop(size_t pool_num)
+    {
+        return GetPool(pool_num).Pop();
+    }
+
+    //--------------
+    void PoolList::Push(size_t pool_num, void* ptr)
+    {
+        GetPool(pool_num).Push(ptr);
     }
 
     //--------------

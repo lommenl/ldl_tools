@@ -2,6 +2,8 @@
 #ifndef POOL_ALLOCATOR_H_
 #define POOL_ALLOCATOR_H_
 
+#include "shared_pointer.h"
+
 #include <vector>
 #include <map>
 
@@ -36,7 +38,7 @@ namespace ldl {
         size_t size();
 
         /// increase size of stack_ to hold new_capacity blocks of nbytes each.
-        void resize(size_t new_capacity);
+        void Resize(size_t new_capacity);
 
         /// Set number of nbyte blocks to add to stack_ if it becomes empty.
         // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
@@ -50,12 +52,12 @@ namespace ldl {
         // Pop a pointer to a single nbytes sized block off of stack_. 
         // If stack is empty and growth_step!=0, call resize() to add more blocks according to the value of growth_step.
         // If stack is empty and growth_step==0, throw an exception.
-        void* allocate();
+        void* Pop();
 
         // Push a block pointer onto stack_.
         // If stack is full and growth_step != 0, increase the size of stack_ by 1.
         // If stack is full and growth_step==0, throw an exception.
-        void deallocate(void* ptr);
+        void Push(void* ptr);
 
     private:
         // no copies allowed
@@ -83,12 +85,15 @@ namespace ldl {
         // stack of pointers to allocated nbytes_ sized memory blocks
         std::vector<void*> stack_;
 
-    }; // Pool
+    }; // class Pool
 
     //---------------------------------
     // all static base class for PoolAllocator objects
     class PoolList {
     protected:
+        /// Return a reference to pool_list[pool_num]
+        static Pool& GetPool(size_t pool_num);
+
         // Set the number of blocks to add to pool_list[pool_num] if it becomes empty.
         // using pool_num = 0 sets the growth_step value for all current and future pools.
         // Otherwise only the value fo pool_list[pool_num] is set.
@@ -107,20 +112,21 @@ namespace ldl {
         // return size of pool_list(n)
         static size_t GetPoolSize(size_t pool_num);
 
-        /// Return a reference to pool_list[pool_num]
-        static Pool& GetPool(size_t pool_num);
+        // pop a block from pool_list[pool_num]
+        static void* Pop(size_t pool_num);
 
-    private:
+        // push a block onto pool_list[pool_num]
+        static void Push(size_t pool_num, void* ptr);
 
         // struct declaring static member variables.
-        // Declaring these inside a struct lets us also declare a constructor function to initialize them at program start,
-        // and a destructor function to destroy them at program shutdown, which the regular class destructor can't do.
+        // Declaring these inside a struct lets us define a constructor to initialize them at program start,
+        // and a destructor to destroy them at program shutdown.
         struct Statics {
 
             //maximum value of pool_num allowed in pool_list
             const size_t MAX_POOLS = static_cast<size_t>(1E9);
 
-            // mutex for thread safety
+            // mutex for thread safe access to these variables
             c11::mutex mutex;
 
             // default value of growth_step_ for all pools
@@ -138,8 +144,9 @@ namespace ldl {
             // destructor (called at program exit)
             ~Statics();
         };
+
         static Statics s;
-    };
+    }; // class PoolList
 
 
     //-----------------
@@ -216,69 +223,61 @@ namespace ldl {
 
         //----
 
-        static void SetGrowthStep(int growth_step, size_t n = 0 );
+        static void SetGrowthStep(size_t n, int growth_step);
 
-        static int GetGrowthStep(size_t n = 0);
+        static int GetGrowthStep(size_t n);
 
-        static void ResizePool(size_t new_capacity, size_t n = 1);
+        static void ResizePool(size_t n, size_t new_capacity);
         
-        static size_t GetPoolSize(size_t n = 1);
+        static size_t GetPoolSize(size_t n);
 
-        // static version of allocate()
+        // static version of allocate() for use by NewArray()
         static T* Allocate(size_t n);
 
-        // static version of deallocate()
+        // static version of deallocate() for use by DeleteArray()
         static void Deallocate(T* ptr, size_t n);
 
-        // duplicate "new T()"
-        static T* New();
+        static SharedPointer<T> NewArray(size_t n);
 
-        // duplicate "new T[n]();"
-        static T* NewArray(size_t n);
+        static SharedPointer<T> New();
 
-        // duplicate "new T(a1)"
         template<typename A1>
-        static T* New(A1 a1);
+        static SharedPointer<T> NewArray(size_t n, A1 a1);
 
-        // duplicate "new T[n](a1)" (which doesn't really exist)
         template<typename A1>
-        static T* NewArray(size_t n, A1 a1);
+        static SharedPointer<T> New(A1 a1);
 
-        // duplicate "new T(a1,a2)" 
         template<typename A1, typename A2>
-        static T* New(A1 a1, A2 a2);
+        static SharedPointer<T> NewArray(size_t n, A1 a1, A2 a2);
 
-        // duplicate "new T[n](a1,a2)"  (which doesn't really exist)
         template<typename A1, typename A2>
-        static T* NewArray(size_t n, A1 a1, A2 a2);
+        static SharedPointer<T> New(A1 a1, A2 a2);
 
-        // duplicate "new T(a1,a2,a3)"
         template<typename A1, typename A2, typename A3>
-        static T* New(A1 a1, A2 a2, A3 a3);
+        static SharedPointer<T> NewArray(size_t n, A1 a1, A2 a2, A3 a3);
 
-        // duplicate "new T[n](a1,a2,a3)" (which doesn't really exist)
         template<typename A1, typename A2, typename A3>
-        static T* NewArray(size_t n, A1 a1, A2 a2, A3 a3);
+        static SharedPointer<T> New(A1 a1, A2 a2, A3 a3);
 
-        // duplicate "delete ptr"
+        // Destroy and deallocate a block allocated from pool that contains n objects of type T.
+        // should not be necessary, since all normally allocated objects are wrapped in SharedPointers
+        // Note: specifying a value of n different than the value used in NewArray() will cause things to catch on fire.
+        static void DeleteArray(size_t n, T* ptr);
+
+        // Return a function object that will call this->Delete(n,ptr);
+        // the returned object can be used as a Deleter argument in a shared_ptr constructor.
+        static c11::function<void(T*)> GetArrayDeleter(size_t n);
+
+        // Destroy and deallocate a block allocated from pool that contains a single object of type T
         // This static function can be used as a Deleter argument in a shared_ptr constructor.
-        // specify as 'ldl::PoolAllocator<T>::Delete';
+        // specify as 'PoolAllocator<T>::Delete';
         static void Delete(T* ptr);
 
         // return a pointer to Delete(T* ptr);
         // The returned object can be used as a Deleter argument in a shared_ptr constructor.
         static c11::function<void(T*)> GetDeleter();
 
-        // sort of duplicate "delete[] ptr"
-        // specifying a value of n different than the value used in
-        // NewArray() will cause things to catch on fire.
-        static void DeleteArray(size_t n, T* ptr);
-
-        // Return a function object that will call this->Delete(n,ptr);
-        // the returned object can be used as a Deleter argument in a shared_ptr constructor.
-        static c11::function<void(T*)> GetArrayDeleter(size_t n = 1);
-
-    };
+    }; //class PoolAllocator<T>
 
     //-----------------------
     template<typename T, typename U>

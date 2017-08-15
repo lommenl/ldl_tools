@@ -7,6 +7,8 @@
 #include <thread>
 #include <functional>
 
+#include <vector>
+
 //-------------------------------------------
 void shared_ptr_test() {
 
@@ -185,6 +187,7 @@ void shared_ptr_test() {
         // operator<=(lhs,rhs);
         // operator=>(lhs,rhs);
 
+
         std::cout << "done" << std::endl;
 
     }
@@ -202,29 +205,52 @@ void pool_allocator_test() {
 
     try {
         // initialize 4-byte pool with 1 element
-        ldl::PoolAllocator<int>::ResizePool(1);
+        ldl::PoolAllocator<int>::ResizePool(1,1);
 
         // allocate 1st element
-        int* p1 = ldl::PoolAllocator<int>().New();
+        ldl::SharedPointer<int> p1 = ldl::PoolAllocator<int>::New();
         std::cout << "p1 = " << p1 << std::endl;
         std::cout << "*p1 = " << *p1 << std::endl;
 
         // allocate 2nd element from 4-byte pool (causes pool to resize)
-        short* p2 = ldl::PoolAllocator<short>().NewArray(2,3);
+        ldl::SharedPointer<short> p2 = ldl::PoolAllocator<short>::NewArray(2,3);
         std::cout << "p2 = " << p2 << std::endl;
         std::cout << "*p2 = " << *p2 << std::endl;
 
         //delete 1st element
-        ldl::PoolAllocator<int>::Delete(p1);
+        p1.reset();
 
         // allocate 3rd element from 4-byte pool (re-use memory from p1)
-        int* p3 = ldl::PoolAllocator<int>::New(11);
+        ldl::SharedPointer<int> p3 = ldl::PoolAllocator<int>::New(11);
         std::cout << "p3 = " << p3 << std::endl;
         std::cout << "*p3 = " << *p3 << std::endl;
 
-        ldl::PoolAllocator<int>::Delete(p3);
-        ldl::PoolAllocator<short>::DeleteArray(2,p2);
+        // delete p2 and p3
+        p3.reset();
+        p2.reset();
 
+        {
+            ldl::SharedPointer<int> p4 = ldl::PoolAllocator<int>::New(10);
+            std::cout << "p4 =" << p4 << std::endl;
+            std::cout << "*p4 =" << *p4 << std::endl;
+        } // auto-delete p4
+
+        ldl::SharedPointer<int> p5 = ldl::PoolAllocator<int>::New(99);
+        std::cout << "p5 =" << p5 << std::endl;
+        std::cout << "*p5 =" << *p5 << std::endl;
+
+        //---------------
+
+        // see if we can use it as an allocator for vectors
+
+        typedef std::vector<int, ldl::PoolAllocator<int> > PoolVector;
+        PoolVector v = PoolVector(ldl::PoolAllocator<int>());
+
+        v.resize(10);
+
+
+
+        std::cout << "done" << std::endl;
     }
     catch (const std::exception& ex) {
         std::cout << "exception in pool_allocator_test: " << ex.what() << std::endl;

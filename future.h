@@ -105,7 +105,7 @@ namespace ldl {
 
     public:
 
-        // default consructor (no shared state)
+        // default constructor (no shared state)
         Promise();
 
         // construct an object with the specified shared state.
