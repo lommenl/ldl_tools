@@ -2,127 +2,131 @@
 #ifndef LINKED_LIST_H_
 #define LINKED_LIST_H_
 
-namespace c11 {
-    using namespace std;
-}
-
 namespace ldl {
 
     //===============
-
+    /// Class defining a pointer that allows it to be used in a LinkedList object.
     template<typename T>
     class Linkable {
     private:
         /// allow LinkedList to access next_ptr_
-        template<U>
-        friend class LinkedList<U>;
+        template<typename U>
+        friend class LinkedList;
 
+        /// Pointer to next element in list.
         T* next_ptr_;
     };
 
     //===============
+    /// Class defining a linked list of pointers to objects which inherit from class Linkabke<>.
     template<typename T>
     class LinkedList {
     public:
 
+        /// Template class for defining iterator and const_iterator.
         template<typename U>
         class Iterator {
         public:
-            Iterator() : ptr_(0) {}
-            Iterator(U* ptr) : ptr_(ptr) {}
-            Iterator(const Iterator& other) : ptr_(other.ptr_) {}
-            Iterator& operator=(const Iterator& other) { if (this != &other){ ptr_ = other.ptr_; } }
-            U& operator*() { return *ptr_; }
-            U* operator->() { return ptr_; }
-            //preincrement
-            Iterator& operator++() { ptr_ = ptr->next_ptr_; return ptr_; }
-            //postincrement
-            Iterator& operator++(int) { U* retval = ptr_; ptr_ = ptr->next_ptr_; return retval; }
-            bool operator==(const Iterator& other) const { return (ptr_ == other.ptr_); }
-            bool operator!=(const Iterator& other) const { return (ptr_ != other.ptr_); }
+            // default constructor
+            Iterator();
+            // construct from pointer
+            Iterator(U* ptr);
+            // copy constructor
+            Iterator(const Iterator& other);
+            // copy assignment operator
+            Iterator& operator=(const Iterator& other);
+            // dereference operator
+            U& operator*();
+            // derefernce operator
+            U* operator->();
+            // preincrement operator
+            Iterator& operator++();
+            // postincrement operator
+            Iterator& operator++(int);
+            // equality operator
+            bool operator==(const Iterator& other) const;
+            // inequality operator
+            bool operator!=(const Iterator& other) const;
         private:
+            /// pointer to current Listable element in list
             U* ptr_;
         };
 
+        // type defining iterator
         typedef Iterator<T> iterator;
 
+        /// Type defining const_iterator
         typedef Iterator<const T> const_iterator;
 
         //---
 
-        LinkedList() : begin_(0) {}
+        // default constructor (empty list)
+        LinkedList();
 
-        LinkedList(const LinkedList& other) : begin_(other.begin_) {}
+        // copy constructor
+        LinkedList(const LinkedList& other);
 
-        LinkedList& operator=(const LinkedList& other)
-        {
-            if (this != &other) {
-                begin_ = other.begin_;
-                return *this;
-            }
-        }
+        // copy assignment operator
+        LinkedList& operator=(const LinkedList& other);
 
-        ~LinkedList() { clear(); }
+        // destructor
+        ~LinkedList();
 
-        void swap(LinkedList& other) {
-            if (this != &other) {
-                std::swap(begin_, other.begin_);
-            }
-        }
+        // swap contents of two objects
+        void swap(LinkedList& other);
 
-        void clear() { while (!empty()) { pop_front(); } }
+        // clear list contents
+        void clear();
 
-        bool empty() const { return (begin_ == 0); }
+        // return true if list is empty
+        bool empty() const;
 
-        bool size() const
-        {
-            size_t retval = 0;
-            for (const_iterator it = begin(); it != end(); ++it) {
-                ++retval;
-            }
-            return retval;
-        }
+        // return number of elements in list
+        std::size_t size() const;
 
-        iterator begin() { return begin_; }
+        // return iterator to beginning of list
+        iterator begin();
 
-        const_iterator begin() const { return begin_; }
+        // return const_iterator to beginning of list
+        const_iterator begin() const;
 
-        iterator end() { return 0; }
+        // return const_iterator to beginning of list
+        const_iterator cbegin();
 
-        const_iterator end() const { return 0; }
+        // return iterator to end of list
+        iterator end();
 
-        T& front() { return *begin_;  }
+        // return const_iterator to end of list
+        const_iterator end() const;
+
+        // return const_iterator to end of list
+        const_iterator cend();
+
+        // return reference to element at front of list
+        T& front();
         
-        T const& front() const { return *begin_;  }
+        // return const reference to element at front of list
+        T const& front() const;
 
-        void push_front(const T& val) 
-        {
-            T* ptr = new T(val);
-            push_front(ptr);
-        }
+        // Insert a copy of val at the front of the list
+        void push_front(const T& val);
 
-        void push_front(T* ptr)
-        {
-            if (ptr) {
-                ptr->next_ptr = begin_;
-                begin = ptr;
-            }
-        }
+        // insert the object referenced by ptr at the front of the list.
+        // The list takes ownership of ptr, and deletes it when its element is removed from the list.
+        void push_front(T* ptr);
 
-        void pop_front()
-        {
-            if (begin_) {
-                T* ptr = begin_;
-                begin_ = begin_->next_ptr_;
-                delete ptr;
-            }
-        }
+        // remove the first element from the list.
+        void pop_front();
+
     private:
+
+        // pointer to first element in list
         T* begin_;
+
     };
 
-} //namespasce ldl
+} //namespace ldl
 
-//#include "linked_list.hpp"
+#include "linked_list.hpp"
 
 #endif //! LINKED_LIST_H_

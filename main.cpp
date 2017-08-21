@@ -2,7 +2,9 @@
 
 #include "shared_pointer.h"
 #include "pool_allocator.h"
+#include "pooled_new.h"
 #include "future.h"
+#include "linked_list.h"
 
 #include <thread>
 #include <functional>
@@ -249,12 +251,6 @@ void future_test()
 }
 
 //-------------------------------------------
-struct foo : public ldl::PooledNew<foo> {
-    int x;
-};
-
-
-
 void pool_allocator_test() {
 
     std::cout << "============================" << std::endl;
@@ -263,7 +259,8 @@ void pool_allocator_test() {
 
     try {
         // initialize int[1] pool with 1 element
-        ldl::PoolAllocator<int>::ResizePool(1, 1);
+        ldl::PoolAllocator<int>::IncreasePoolSize(1, 1);
+
         // set growth_step for all pools to 10
         ldl::PoolAllocator<int>::SetGrowthStep(0, 10);
 
@@ -308,11 +305,30 @@ void pool_allocator_test() {
 
         v.resize(10);
 
-        //---------------
+        std::cout << "done" << std::endl;
+    }
+    catch (const std::exception& ex) {
+        std::cout << "exception in pool_allocator_test: " << ex.what() << std::endl;
+    }
 
-    //test PooledNew<>
+}
+
+//-------------------------------------------
+struct foo : public ldl::PooledNew<foo> {
+    int x;
+};
+
+void pooled_new_test()
+{
+    try {
+
+        std::cout << "============================" << std::endl;
+        std::cout << "Starting pooled_new_test" << std::endl;
+        std::cout << "============================" << std::endl;
+
         //foo::SetPoolGrowthStep(2);
-        foo::ResizePool(2);
+        foo::ResizePool(1);
+        foo::IncreasePoolSize(1);
 
         foo x1;
         x1.x = 11;
@@ -350,11 +366,76 @@ void pool_allocator_test() {
 
 }
 
+//-------------------------------------------
+
+struct bar : public ldl::Linkable<bar>, ldl::PooledNew<bar> {
+    int x;
+};
+
+void linked_list_test()
+{
+    try {
+
+        std::cout << "============================" << std::endl;
+        std::cout << "Starting linked_list_test" << std::endl;
+        std::cout << "============================" << std::endl;
+
+        bar::SetPoolGrowthStep(10);
+
+        ldl::LinkedList<bar> blist;
+
+        std::cout << "blist.size() = " << blist.size() << std::endl;
+        std::cout << "blist.empty() = " << blist.empty() << std::endl;
+
+        bar x1;
+        x1.x = 10;
+        blist.push_front(x1);
+        x1.x = 11;
+        blist.push_front(x1);
+        x1.x = 12;
+        blist.push_front(x1);
+        x1.x = 13;
+        blist.push_front(x1);
+        x1.x = 14;
+        blist.push_front(x1);
+
+        std::cout << "blist.size() = " << blist.size() << std::endl;
+        std::cout << "blist.empty() = " << blist.empty() << std::endl;
+
+        for (ldl::LinkedList<bar>::const_iterator it = blist.cbegin(); it != blist.cend(); ++it) {
+            std::cout << "it->x = " << it->x << std::endl;
+        }
+
+        std::cout << "blist.front().x = " << blist.front().x << std::endl;
+
+        blist.pop_front();
+
+        std::cout << "blist.front().x = " << blist.front().x << std::endl;
+
+        bar* p1 = new bar;
+        p1->x = 15;
+        blist.push_front(p1);
+
+        std::cout << "blist.front().x = " << blist.front().x << std::endl;
+
+        blist.pop_front();
+
+        std::cout << "blist.front().x = " << blist.front().x << std::endl;
+
+        std::cout << "done" << std::endl;
+    }
+    catch (const std::exception& ex) {
+        std::cout << "exception in linked_list_test: " << ex.what() << std::endl;
+    }
+
+}
 
 //-------------------------------------------
 int main() {
-    shared_ptr_test();
-    future_test();
+    linked_list_test();
     pool_allocator_test();
+    pooled_new_test();
+    future_test();
+    shared_ptr_test();
     return 0;
 }

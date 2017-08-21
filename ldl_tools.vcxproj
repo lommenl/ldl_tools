@@ -143,6 +143,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="linked_list.h" />
+    <ClInclude Include="linked_list.hpp" />
+    <ClInclude Include="pool.h" />
+    <ClInclude Include="pooled_new.h" />
+    <ClInclude Include="pooled_new.hpp" />
     <ClInclude Include="pool_allocator.h" />
     <ClInclude Include="pool_allocator.hpp" />
     <ClInclude Include="future.h" />
@@ -152,7 +156,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="pool_allocator.cpp" />
+    <ClCompile Include="pool.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

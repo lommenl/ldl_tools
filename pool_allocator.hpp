@@ -1,77 +1,13 @@
 #include "pool_allocator.h"
 
-#include "shared_pointer.h"
-
 #include <exception>
-#include <memory> //std::allocator
-#include<functional> //std::bind()
-#include <cstdint> //int8_t
+#include <functional> // std:: bind
+namespace c11 {
+    using namespace std;
+}
+using namespace std::placeholders; // to match using in <functional>
 
 namespace ldl {
-
-    //---------------------
-    template<typename T>
-    void PooledNew<T>::ResizePool(std::size_t num_blocks)
-    {
-        pool_.Resize(num_blocks);
-    }
-
-
-    //---------------------
-    template<typename T>
-    void PooledNew<T>::SetPoolGrowthStep(int growth_step)
-    {
-        pool_.SetGrowthStep(growth_step);
-    }
-
-    //---------------------
-    template<typename T>
-    int PooledNew<T>::GetPoolGrowthStep()
-    {
-        return pool_.GetGrowthStep();
-    }
-
-    //---------------------
-    template<typename T>
-    std::size_t PooledNew<T>::GetPoolBlockSize()
-    {
-        return block_size;
-    }
-
-    //---------------------
-    template<typename T>
-    std::size_t PooledNew<T>::GetPoolFree()
-    {
-        return pool_.GetFree();
-    }
-
-    //---------------------
-    template<typename T>
-    std::size_t PooledNew<T>::GetPoolCapacity()
-    {
-        return pool_.GetCapacity();
-    }
-
-    //---------------------
-    template<typename T>
-    void* PooledNew<T>::operator new(std::size_t nbytes)
-    {
-        if (nbytes != pool_.GetBlockSize()) { throw std::bad_alloc(); }
-        return pool_.Pop();
-    }
-
-    //---------------------
-    template<typename T>
-    void PooledNew<T>::operator delete(void* ptr)
-    {
-        pool_.Push(ptr);
-    }
-
-    //---------------------
-    template<typename T>
-    Pool PooledNew<T>::pool_(sizeof(T), 0, 0); // empty buffer
-
-    //==========================================
 
     //--------------
     template<typename T>
@@ -146,6 +82,13 @@ namespace ldl {
     void PoolAllocator<T>::ResizePool(size_t numel, size_t num_blocks)
     {
         pool_list_.ResizePool(numel * sizeof(T), num_blocks);
+    }
+
+    //--------------
+    template<typename T>
+    void PoolAllocator<T>::IncreasePoolSize(size_t numel, size_t num_blocks)
+    {
+        pool_list_.IncreasePoolSize(numel * sizeof(T), num_blocks);
     }
 
     //--------------

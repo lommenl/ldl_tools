@@ -1,10 +1,14 @@
-#include "pool_allocator.h"
+#include "pool.h"
 
 #include <iostream>
 #include <exception>
 #include <memory> //std::allocator
-#include <cstdint> //std::uint8_t
 #include <algorithm> // std::max
+
+#include <cstdint> //std::uint8_t
+namespace c11 {
+    using namespace std;
+}
 
 namespace ldl {
 
@@ -79,6 +83,15 @@ namespace ldl {
         if (mutex_ptr_) { //object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
             NoLockResize(num_blocks);
+        }
+    }
+
+    //-----------------
+    void Pool::IncreaseSizeBy(std::size_t num_blocks)
+    {
+        if (mutex_ptr_) { //object is valid
+            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
+            NoLockResize( stack_.size() + num_blocks);
         }
     }
 
@@ -209,6 +222,12 @@ namespace ldl {
     }
 
     //--------------
+    void PoolList::IncreasePoolSize(std::size_t block_size, std::size_t num_blocks)
+    {
+        GetPool(block_size).IncreaseSizeBy(num_blocks); // may create the pool
+    }
+
+    //--------------
     void PoolList::SetGrowthStep(std::size_t block_size, int growth_step)
     {
         if (block_size == 0) { // set default, and all pools
@@ -274,6 +293,6 @@ namespace ldl {
     //==================================================
 
     //--------------
-    PoolList PoolAllocatorBase::pool_list_;
+    PoolList StaticPoolList::pool_list_;
 
 } //namespace ldl
