@@ -79,9 +79,9 @@ namespace ldl {
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::ResizePool(size_t numel, size_t num_blocks)
+    void PoolAllocator<T>::SetPoolSize(size_t numel, size_t num_blocks)
     {
-        pool_list_.ResizePool(numel * sizeof(T), num_blocks);
+        pool_list_.SetPoolSize(numel * sizeof(T), num_blocks);
     }
 
     //--------------
@@ -113,9 +113,9 @@ namespace ldl {
     }
     //--------------
     template<typename T>
-    size_t PoolAllocator<T>::GetPoolCapacity(size_t numel)
+    size_t PoolAllocator<T>::GetPoolSize(size_t numel)
     {
-        return pool_list_.GetPoolCapacity(numel * sizeof(T));
+        return pool_list_.GetPoolSize(numel * sizeof(T));
     }
 
     //--------------

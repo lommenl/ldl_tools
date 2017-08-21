@@ -30,11 +30,11 @@ namespace ldl {
         // initialize a default constructed object 
         void Initialize(std::size_t block_size, std::size_t num_blocks, int growth_step);
 
-        /// resize stack_ to hold num_blocks blocks.
-        void Resize(std::size_t num_blocks);
+        /// Set size of stack_ to hold num_blocks blocks.
+        void SetSize(std::size_t num_blocks);
 
         /// increase stack_ size by num_blocks blocks.
-        void IncreaseSizeBy(std::size_t num_blocks);
+        void IncreaseSize(std::size_t num_blocks);
 
         /// Set number of blocks to automatically add to stack_ if it becomes empty.
         // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
@@ -52,10 +52,10 @@ namespace ldl {
         std::size_t GetFree();
 
         // return total number (allocated+ and unallocated) blocks in pool.
-        std::size_t GetCapacity();
+        std::size_t GetSize();
 
         // Pop a pointer to a single block off of stack_. 
-        // If stack is empty and growth_step!=0, call resize() to add more blocks according to the value of growth_step.
+        // If stack is empty and growth_step!=0, call increaseSize() to add more blocks according to the value of growth_step.
         // If stack is empty and growth_step==0, throw an exception.
         void* Pop();
 
@@ -69,8 +69,8 @@ namespace ldl {
         Pool(const Pool&) = delete;
         Pool& operator=(const Pool&) = delete;
 
-        // Resize stack_ without locking mutex (assume it's already locked)
-        void NoLockResize(std::size_t new_cap);
+        // Set size of stack_ without locking mutex (assume it's already locked)
+        void NoLockSetSize(std::size_t num_blocks);
 
         //----
 
@@ -113,7 +113,7 @@ namespace ldl {
         Pool& GetPool(std::size_t block_size);
 
         /// Set the size of pool_list[block_size] to hold num_blocks blocks.
-        void ResizePool(std::size_t block_size, std::size_t num_blocks);
+        void SetPoolSize(std::size_t block_size, std::size_t num_blocks);
 
         /// Set the size of pool_list[block_size] to hold num_blocks blocks.
         void IncreasePoolSize(std::size_t block_size, std::size_t num_blocks);
@@ -134,7 +134,7 @@ namespace ldl {
         std::size_t GetPoolFree(std::size_t block_size);
 
         // return total number of blocks (unallocated and allocated) in pool_list[block_size]
-        std::size_t GetPoolCapacity(std::size_t block_size);
+        std::size_t GetPoolSize(std::size_t block_size);
 
         // pop a block from pool_list[block_size]
         void* Pop(std::size_t block_size);

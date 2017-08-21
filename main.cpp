@@ -327,7 +327,7 @@ void pooled_new_test()
         std::cout << "============================" << std::endl;
 
         //foo::SetPoolGrowthStep(2);
-        foo::ResizePool(1);
+        foo::SetPoolSize(1);
         foo::IncreasePoolSize(1);
 
         foo x1;

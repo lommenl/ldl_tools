@@ -11,16 +11,16 @@ namespace ldl {
 
     //---------------------
     template<typename T>
-    void PooledNew<T>::ResizePool(std::size_t num_blocks)
+    void PooledNew<T>::SetPoolSize(std::size_t num_blocks)
     {
-        pool_.Resize(num_blocks);
+        pool_.SetSize(num_blocks);
     }
 
     //---------------------
     template<typename T>
     void PooledNew<T>::IncreasePoolSize(std::size_t num_blocks)
     {
-        pool_.IncreaseSizeBy(num_blocks);
+        pool_.IncreaseSize(num_blocks);
     }
 
     //---------------------
@@ -53,9 +53,9 @@ namespace ldl {
 
     //---------------------
     template<typename T>
-    std::size_t PooledNew<T>::GetPoolCapacity()
+    std::size_t PooledNew<T>::GetPoolSize()
     {
-        return pool_.GetCapacity();
+        return pool_.GetSize();
     }
 
     //---------------------
@@ -75,6 +75,6 @@ namespace ldl {
 
     //---------------------
     template<typename T>
-    Pool PooledNew<T>::pool_(sizeof(T), 0, 0); // empty buffer
+    Pool PooledNew<T>::pool_(sizeof(T), 0, 0); // empty pool
 
 } //namespace ldl

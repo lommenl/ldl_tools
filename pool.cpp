@@ -78,20 +78,20 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::Resize(std::size_t num_blocks)
+    void Pool::SetSize(std::size_t num_blocks)
     {
         if (mutex_ptr_) { //object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            NoLockResize(num_blocks);
+            NoLockSetSize(num_blocks);
         }
     }
 
     //-----------------
-    void Pool::IncreaseSizeBy(std::size_t num_blocks)
+    void Pool::IncreaseSize(std::size_t num_blocks)
     {
         if (mutex_ptr_) { //object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            NoLockResize( stack_.size() + num_blocks);
+            NoLockSetSize( stack_.size() + num_blocks);
         }
     }
 
@@ -133,7 +133,7 @@ namespace ldl {
     }
 
     //-----------------
-    std::size_t Pool::GetCapacity()
+    std::size_t Pool::GetSize()
     {
         std::size_t retval = 0;
         if (mutex_ptr_) { // object is valid
@@ -152,10 +152,10 @@ namespace ldl {
             if (tos_ == 0) { //if stack is empty
                 if (growth_step_ > 0) { // growth_step is an increment
                     //  add growth_step_ elements to stack_
-                    NoLockResize(stack_.size() + static_cast<std::size_t>(growth_step_));
+                    NoLockSetSize(stack_.size() + static_cast<std::size_t>(growth_step_));
                 }
                 else if (growth_step_ < 0) { // growth step is negative inverse of a scale factor. (e.g. -3 = a scale factor of 1/3
-                    NoLockResize(stack_.size() + std::max<std::size_t>(1, stack_.size()/static_cast<std::size_t>(-growth_step_)));
+                    NoLockSetSize(stack_.size() + std::max<std::size_t>(1, stack_.size()/static_cast<std::size_t>(-growth_step_)));
                 }
                 else { // growth_step == 0 // no growth allowed
                     throw std::bad_alloc();
@@ -181,7 +181,7 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::NoLockResize(std::size_t num_blocks)
+    void Pool::NoLockSetSize(std::size_t num_blocks)
     {
         std::size_t old_capacity = stack_.size();
         if (num_blocks <= old_capacity) {
@@ -216,15 +216,15 @@ namespace ldl {
     }
 
     //--------------
-    void PoolList::ResizePool(std::size_t block_size, std::size_t num_blocks)
+    void PoolList::SetPoolSize(std::size_t block_size, std::size_t num_blocks)
     {
-        GetPool(block_size).Resize(num_blocks); // may create the pool
+        GetPool(block_size).SetSize(num_blocks); // may create the pool
     }
 
     //--------------
     void PoolList::IncreasePoolSize(std::size_t block_size, std::size_t num_blocks)
     {
-        GetPool(block_size).IncreaseSizeBy(num_blocks); // may create the pool
+        GetPool(block_size).IncreaseSize(num_blocks); // may create the pool
     }
 
     //--------------
@@ -269,11 +269,11 @@ namespace ldl {
     }
 
     //--------------
-    std::size_t PoolList::GetPoolCapacity(std::size_t block_size)
+    std::size_t PoolList::GetPoolSize(std::size_t block_size)
     {
         std::size_t retval = 0;
         if (pool_map_.count(block_size)) { // dont create a pool if it doesn't exist
-            retval = GetPool(block_size).GetCapacity();
+            retval = GetPool(block_size).GetSize();
         }
         return retval;
     }

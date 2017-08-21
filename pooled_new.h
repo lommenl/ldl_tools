@@ -13,7 +13,7 @@ namespace ldl {
     public:
 
         // Resize pool to hold num_blocks buffers
-        static void ResizePool(std::size_t num_blocks);
+        static void SetPoolSize(std::size_t num_blocks);
 
         // increase pool size by num_blocks buffers
         static void IncreasePoolSize(std::size_t num_blocks);
@@ -33,7 +33,7 @@ namespace ldl {
         static std::size_t GetPoolFree();
 
         // return total number (allocated & unallocated) of blocks in pool.
-        static std::size_t GetPoolCapacity();
+        static std::size_t GetPoolSize();
 
         //get a pointer to a block containing of the specified size
         // this function is called to allocate memory for an object.

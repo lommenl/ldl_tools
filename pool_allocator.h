@@ -88,10 +88,10 @@ namespace ldl {
         // PoolList functions
         //-----------------
 
-        // Resize a pool to hold num_blocks buffers of size sizeof(T[numel])
-        static void ResizePool(std::size_t numel, std::size_t num_blocks);
+        // Set size of pool hold num_blocks buffers
+        static void SetPoolSize(std::size_t numel, std::size_t num_blocks);
 
-        // Increas the size of a pool by num_blocks.
+        // Increase the size of a pool by num_blocks.
         static void IncreasePoolSize(std::size_t numel, std::size_t num_blocks);
         
         // set the growth_step for the pool that holds buffers of size sizeof(T[numel])
@@ -104,7 +104,7 @@ namespace ldl {
         static std::size_t GetPoolFree(std::size_t numel);
 
         // Get the total number of blocks (allocated and unallocat3ed) in the pool that holds buffers of size sizeof(T[numel])
-        static std::size_t GetPoolCapacity(std::size_t numel);
+        static std::size_t GetPoolSize(std::size_t numel);
 
         // static version of allocate() for use by NewArray()
         static T* Allocate(std::size_t numel);
