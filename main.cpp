@@ -197,6 +197,64 @@ void shared_ptr_test() {
 }
 
 //-------------------------------------------
+
+void promise_thread(ldl::Promise<int>* prom, int val) {
+    c11::this_thread::sleep_for(std::chrono::seconds(2));
+    prom->set_value(val);
+}
+
+void future_test()
+{
+    std::cout << "============================" << std::endl;
+    std::cout << "Starting future_test" << std::endl;
+    std::cout << "============================" << std::endl;
+
+    try {
+
+        ldl::FutureState<int> state;
+
+        ldl::Promise<int> prom(&state);
+
+        ldl::Future<int> fut;
+        fut.swap(prom.get_future()); // move assignment
+
+        // spawn thread
+        c11::thread th(c11::bind(promise_thread, &prom, 1));
+
+        int val = fut.get();
+
+        std::cout << "val = " << val << std::endl;
+
+        th.join();
+
+        //repeat
+        ldl::Promise<int> prom2(&state);
+
+        ldl::Future<int> fut2;
+        fut2.swap(prom2.get_future()); // move assignment
+
+        c11::thread th2(c11::bind(promise_thread, &prom2, 2));
+
+        int val2 = fut2.get();
+
+        std::cout << "val2 = " << val2 << std::endl;
+
+        th2.join();
+
+        std::cout << "done" << std::endl;
+    }
+    catch (const std::exception& ex) {
+        std::cout << "exception in future-test: " << ex.what() << std::endl;
+    }
+}
+
+//-------------------------------------------
+struct foo : public ldl::PooledNew<foo> {
+    int x;
+};
+
+
+
 void pool_allocator_test() {
 
     std::cout << "============================" << std::endl;
@@ -204,8 +262,10 @@ void pool_allocator_test() {
     std::cout << "============================" << std::endl;
 
     try {
-        // initialize 4-byte pool with 1 element
-        ldl::PoolAllocator<int>::ResizePool(1,1);
+        // initialize int[1] pool with 1 element
+        ldl::PoolAllocator<int>::ResizePool(1, 1);
+        // set growth_step for all pools to 10
+        ldl::PoolAllocator<int>::SetGrowthStep(0, 10);
 
         // allocate 1st element
         ldl::SharedPointer<int> p1 = ldl::PoolAllocator<int>::New();
@@ -213,7 +273,7 @@ void pool_allocator_test() {
         std::cout << "*p1 = " << *p1 << std::endl;
 
         // allocate 2nd element from 4-byte pool (causes pool to resize)
-        ldl::SharedPointer<short> p2 = ldl::PoolAllocator<short>::NewArray(2,3);
+        ldl::SharedPointer<short> p2 = ldl::PoolAllocator<short>::NewArray(2, 3);
         std::cout << "p2 = " << p2 << std::endl;
         std::cout << "*p2 = " << *p2 << std::endl;
 
@@ -248,70 +308,53 @@ void pool_allocator_test() {
 
         v.resize(10);
 
+        //---------------
 
+    //test PooledNew<>
+        //foo::SetPoolGrowthStep(2);
+        foo::ResizePool(2);
+
+        foo x1;
+        x1.x = 11;
+        std::cout << "x1.x = " << x1.x << std::endl;
+
+        foo* px2 = new foo();
+        px2->x = 22;
+        std::cout << "px2 = " << px2 << std::endl;
+        std::cout << "px2->x = " << px2->x << std::endl;
+
+        foo* px3 = new foo();
+        px3->x = 33;
+        std::cout << "px3 = " << px3 << std::endl;
+        std::cout << "px3->x = " << px3->x << std::endl;
+
+        delete px2;
+
+        {
+            ldl::SharedPointer<foo> px4(new foo());
+            px4->x = 44;
+            std::cout << "px4 = " << px4 << std::endl;
+            std::cout << "px4->x = " << px4->x << std::endl;
+        }
+
+        ldl::SharedPointer<foo> px5(new foo());
+        px5->x = 55;
+        std::cout << "px5 = " << px5 << std::endl;
+        std::cout << "px5->x = " << px5->x << std::endl;
 
         std::cout << "done" << std::endl;
     }
     catch (const std::exception& ex) {
         std::cout << "exception in pool_allocator_test: " << ex.what() << std::endl;
     }
+
 }
 
-
-//-------------------------------------------
-
-void promise_thread(ldl::Promise<int>* prom, int val ) {
-    c11::this_thread::sleep_for(std::chrono::seconds(2));
-    prom->set_value(val);
-}
-
-void future_test()
-{
-    std::cout << "============================" << std::endl;
-    std::cout << "Starting future_test" << std::endl;
-    std::cout << "============================" << std::endl;
-
-    try {
-
-        ldl::FutureState<int> state;
-
-        ldl::Promise<int> prom(&state);
-
-        ldl::Future<int> fut;
-        fut.swap(prom.get_future()); // move assignment
-
-        // spawn thread
-        c11::thread th(c11::bind(promise_thread, &prom,1));
-
-        int val = fut.get();
-
-        std::cout << "val = " << val << std::endl;
-
-        th.join();
-
-        //repeat
-        ldl::Promise<int> prom2(&state);
-
-        ldl::Future<int> fut2;
-        fut2.swap(prom2.get_future()); // move assignment
-
-        c11::thread th2(c11::bind(promise_thread, &prom2,2));
-
-        int val2 = fut2.get();
-
-        std::cout << "val2 = " << val2 << std::endl;
-
-        th2.join();
-    }
-    catch (const std::exception& ex) {
-        std::cout << "exception in future-test: " << ex.what() << std::endl;
-    }
-}
 
 //-------------------------------------------
 int main() {
     shared_ptr_test();
-    pool_allocator_test();
     future_test();
+    pool_allocator_test();
     return 0;
 }

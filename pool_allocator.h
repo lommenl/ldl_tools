@@ -13,34 +13,34 @@
 namespace c11 {
     using namespace std;
 }
+
 using namespace std::placeholders; // to match "using namespace std::placeholders;" in <functional>
 
 namespace ldl {
 
     ///--------------
-    // Class defining a stack of pointers to memory blocks of  size - n
+    // Class defining a stack of pointers to memory blocks.
     class Pool {
     public:
         // default constructor
         Pool();
 
-        // construct object that holds nbyte sized blocks.
-        Pool(size_t nbytes, int growth_step);
+        // construct and initialize object that holds num_blocks block_size byte blocks.
+        Pool(std::size_t block_size, std::size_t num_blocks = 0, int growth_step = 0);
 
         // destructor
         ~Pool();
 
         // swap state with other.
-        // (needed to insert a non-copyable object into a standard container)
         void swap(Pool& other);
 
-        // return the maximum capacity of the pool (NOT the number of blocks it currently contains.)
-        size_t size();
+        // initialize a default constructed object 
+        void Initialize(std::size_t block_size, std::size_t num_blocks, int growth_step);
 
-        /// increase size of stack_ to hold new_capacity blocks of nbytes each.
-        void Resize(size_t new_capacity);
+        /// resize stack_ to hold num_blocks blocks.
+        void Resize(std::size_t num_blocks);
 
-        /// Set number of nbyte blocks to add to stack_ if it becomes empty.
+        /// Set number of blocks to automatically add to stack_ if it becomes empty.
         // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
         // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
         // setting growth_step = 0 disables automatic growth of the pool.
@@ -49,7 +49,16 @@ namespace ldl {
         /// Return the current value of growth_step.
         int GetGrowthStep();
 
-        // Pop a pointer to a single nbytes sized block off of stack_. 
+        /// return number of bytes in a block
+        std::size_t GetBlockSize() const;
+
+        // return number of unallocated blocks in pool.
+        std::size_t GetFree();
+
+        // return total number (allocated+ and unallocated) blocks in pool.
+        std::size_t GetCapacity();
+
+        // Pop a pointer to a single block off of stack_. 
         // If stack is empty and growth_step!=0, call resize() to add more blocks according to the value of growth_step.
         // If stack is empty and growth_step==0, throw an exception.
         void* Pop();
@@ -61,11 +70,11 @@ namespace ldl {
 
     private:
         // no copies allowed
-        Pool(const Pool&); // = delete;
-        Pool& operator=(const Pool&); // = delete;
+        Pool(const Pool&) = delete;
+        Pool& operator=(const Pool&) = delete;
 
         // Resize stack_ without locking mutex (assume it's already locked)
-        void NoLockResize(size_t new_cap);
+        void NoLockResize(std::size_t new_cap);
 
         //----
 
@@ -74,88 +83,142 @@ namespace ldl {
         c11::shared_ptr<c11::mutex> mutex_ptr_;
 
         // number of bytes in each block
-        size_t nbytes_;
+        std::size_t block_size_;
 
-        // number of unallocated (valid) block pointers in stack_;
-        size_t size_;
+        // top of stack
+        std::size_t tos_;
 
-        // description of number of blocks to add to stack_ if it becomes empty.
+        // Description of number of blocks to add to stack_ if it becomes empty.
         int growth_step_;
 
-        // stack of pointers to allocated nbytes_ sized memory blocks
+        // stack of pointers to allocated block_size_ byte memory blocks
         std::vector<void*> stack_;
 
     }; // class Pool
 
     //---------------------------------
-    // all static base class for PoolAllocator objects
+    // class that manages multiple pools of different sizes.
     class PoolList {
-    protected:
-        /// Return a reference to pool_list[pool_num]
-        static Pool& GetPool(size_t pool_num);
+    public:
+        // Default constructor
+        PoolList() = default;
 
-        // Set the number of blocks to add to pool_list[pool_num] if it becomes empty.
-        // using pool_num = 0 sets the growth_step value for all current and future pools.
-        // Otherwise only the value fo pool_list[pool_num] is set.
+        // copy constructor
+        PoolList(const PoolList&) = default;
+
+        // copy assignment
+        PoolList& operator=(const PoolList&) = default;
+
+        // destructor
+        ~PoolList() = default;
+
+        /// Return a reference to pool_list[block_size]
+        /// Will create an empty pool with default_growth_step if it doesn't already exist.
+        Pool& GetPool(std::size_t block_size);
+
+        /// Set the size of pool_list[block_size] to hold num_blocks blocks.
+        void ResizePool(std::size_t block_size, std::size_t num_blocks);
+
+        // Set the number of blocks to add to pool_list[block_size] if it becomes empty.
+        // using block_size = 0 sets the growth_step value for all current and future pools.
+        // Otherwise only the value of pool_list[block_size] is set.
         // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
         // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
         // setting growth_step = 0 disables automatic growth of a pool.
-        static void SetGrowthStep(size_t pool_num, int growth_step);
+        void SetGrowthStep(std::size_t block_size, int growth_step);
 
-        // Return the number of blocks that will be added to pool_list[pool_num] if it becomes empty.
-        // setting pool_num=0 returns the default value that will be assigned to new pools when they are created.
-        static int GetGrowthStep(size_t pool_num);
+        // Return the number of blocks that will be added to pool_list[block_size] if it becomes empty.
+        // setting block_size=0 returns the default value that will be assigned to new pools when they are created.
+        int GetGrowthStep(std::size_t block_size);
 
-        /// Set the size of pool_list[pool_num] to hold new_capacity blocks.
-        static void ResizePool(size_t pool_num, size_t new_capacity);
+        // return current number of unallocated blocks in pool_list[block_size]
+        std::size_t GetPoolFree(std::size_t block_size);
 
-        // return size of pool_list(n)
-        static size_t GetPoolSize(size_t pool_num);
+        // return total number of blocks (unallocated and allocated) in pool_list[block_size]
+        std::size_t GetPoolCapacity(std::size_t block_size);
 
-        // pop a block from pool_list[pool_num]
-        static void* Pop(size_t pool_num);
+        // pop a block from pool_list[block_size]
+        void* Pop(std::size_t block_size);
 
-        // push a block onto pool_list[pool_num]
-        static void Push(size_t pool_num, void* ptr);
+        // push a block onto pool_list[block_size]
+        void Push(std::size_t block_size, void* ptr);
 
-        // struct declaring static member variables.
-        // Declaring these inside a struct lets us define a constructor to initialize them at program start,
-        // and a destructor to destroy them at program shutdown.
-        struct Statics {
+        //maximum value of block_size allowed in pool_list
+        const std::size_t MAX_BLOCK_SIZE = static_cast<std::size_t>(1E9);
 
-            //maximum value of pool_num allowed in pool_list
-            const size_t MAX_POOLS = static_cast<size_t>(1E9);
+    private:
 
-            // mutex for thread safe access to these variables
-            c11::mutex mutex;
+        // mutex for thread safe access to list
+        c11::mutex mutex_;
 
-            // default value of growth_step_ for all pools
-             int default_growth_step;
+        // default value of growth_step_ for all pools
+         int default_growth_step_;
 
-            // Type defining a map of multiple Pool objects keyed by their pool_num value. 
-            typedef std::map<size_t, Pool> PoolList;
+        // A map of multiple Pool objects keyed by their block_size value.
+         typedef std::map<std::size_t, Pool> PoolMap;
+         PoolMap pool_map_;
 
-            // A map of multiple Pool objects keyed by their pool_num value.
-            PoolList pool_list;
-
-            // default constructor (called at program start)
-            Statics();
-
-            // destructor (called at program exit)
-            ~Statics();
-        };
-
-        static Statics s;
     }; // class PoolList
 
 
     //-----------------
-    /// template class for an allocator object that will minimize allocations of heap memory by recycling the allocated memory of deleted
-    /// objects for other objects.
-    /// Can be used in place of std::allocator as an allocator for STL container classes and other classes like shared_ptr,
-    /// which allocate memory internally.
+    // base class that will allocate objects of a class from a static memory pool.
+    // does not allow arrays of objects to be allocated from a pool.
     template<typename T>
-    class PoolAllocator : public PoolList {
+    class PooledNew {
+    public:
+
+        // Resize pool to hold num_blocks buffers
+        static void ResizePool(std::size_t num_blocks);
+
+        /// Set number of elements to add to Pool if it becomes empty.
+
+        // setting growth_step > 0 automatically increases the pool size by  +growth_step elements when it is empty
+        // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
+        // setting growth_step = 0 disables automatic growth of the pool.
+        static void SetPoolGrowthStep(int growth_step);
+
+        /// Return the current value of growth_step.
+        static int GetPoolGrowthStep();
+
+        static std::size_t GetPoolBlockSize();
+
+        // return number of unallocated blocks in pool.
+        static std::size_t GetPoolFree();
+
+        // return total number (allocated & unallocated) of blocks in pool.
+        static std::size_t GetPoolCapacity();
+
+        //get a pointer to a block containing of the specified size
+        // this function is called to allocate memory for an object.
+        static void* operator new(std::size_t);
+
+        // return a block of the specified size back to its pool.
+        // his function is called to deallocate memory for an object.
+        static void operator delete(void* ptr);
+
+    private:
+
+        static Pool pool_;
+
+    }; //class PooledNew
+
+
+
+    //-----------------
+    // Class declaring a static PoolList shared by all PoolAllocator<T> classes.
+    class PoolAllocatorBase {
+    protected:
+        static PoolList pool_list_;
+    };
+
+    //-----------------
+    /// template class for an allocator that will minimize allocations of heap memory
+    /// by recycling the allocated memory of deleted objects for reuse.
+    /// Can be used in place of std::allocator as an allocator for STL container classes and other
+    /// classes (like shared_ptr), which allocate memory internally.
+    template<typename T>
+    class PoolAllocator : public PoolAllocatorBase {
     public:
         typedef T value_type;
 
@@ -167,111 +230,144 @@ namespace ldl {
 
         typedef const T& const_reference;
 
-        typedef size_t size_type;
+        typedef std::size_t size_type;
 
         typedef ptrdiff_t difference_type;
 
         template <typename U> struct rebind { typedef PoolAllocator<U> other; };
 
-        //-----
+        //-----------------
+        // std::allocator functions
+        //-----------------
 
         // Default Constructor
-        PoolAllocator() {} // = default;
+        PoolAllocator() = default;
 
         // Copy Constructor
-        PoolAllocator(const PoolAllocator&) {} // = default;
-
-        // Destructor
-        ~PoolAllocator() {} // = default;
+        PoolAllocator(const PoolAllocator&) = default;
 
         // Copy asignment operator
-        PoolAllocator& operator=(const PoolAllocator&) {} // = default;
+        PoolAllocator& operator=(const PoolAllocator&) = default;
 
-        // Copy constructor from PoolAllocator<U>
+        // Destructor
+        ~PoolAllocator() = default;
+
+        // Copy constructor, from PoolAllocator<U>
         template<typename U>
         PoolAllocator(const PoolAllocator<U>& other);
 
-        // Copy assignment from PoolAllocator<U>
+        // Copy assignment, from PoolAllocator<U>
         template<typename U>
         PoolAllocator& operator=(const PoolAllocator<U>& other);
 
         //---
 
-        // return pointer to object x;
+        // return a pointer to object x;
         T* address(T& x) const;
 
-        // return const pointer to object x;
+        // return a const pointer to object x;
         const T* address(const T& x) const;
 
-        // return maximum number of elements of type T that can be allocated in a contiguous block.
-        size_t max_size() const;
+        // Return the maximum number of elements of type T that can be allocated in a contiguous block.
+        std::size_t max_size() const;
 
-        /// construct an object of type T in memory pointed to by ptr.
+        /// Construct an object of type T in memory pointed to by ptr.
         void construct(T* ptr, const T& val) const;
 
         /// Call destructor ~T() on memory pointed to by ptr.
         void destroy(T* ptr) const;
 
-        /// Return a pointer to block of memory of size sizeof(T[n])
+        /// Return a pointer to block of memory of size sizeof(T[numel])
         /// If growth_step for the matching pool is nonzero, the function will allocate memory from the heap if necessary.
         /// (which will will be returned to the pool when deallocated.)
         /// if growth_step==0, it will throw an exception.
-        T* allocate(size_t n, const void* hint = 0);
+        T* allocate(std::size_t numel, const void* hint = 0);
 
-        /// return a block of memory assumed to be of size sizeof(T[n]) to the appropriate pool
-        void deallocate(T* ptr, size_t n);
+        /// return a block of memory (assumed to be of size sizeof(T[numel])) to the appropriate pool.
+        void deallocate(T* ptr, std::size_t numel);
 
-        //----
+        //-----------------
+        // PoolList functions
+        //-----------------
 
-        static void SetGrowthStep(size_t n, int growth_step);
-
-        static int GetGrowthStep(size_t n);
-
-        static void ResizePool(size_t n, size_t new_capacity);
+        // Resize a pool to hold num_blocks buffers of size sizeof(T[numel])
+        static void ResizePool(std::size_t numel, std::size_t num_blocks);
         
-        static size_t GetPoolSize(size_t n);
+        // set the growth_step for the pool that holds buffers of size sizeof(T[numel])
+        static void SetGrowthStep(std::size_t numel, int growth_step);
+
+        // get the growth_step for the pool that holds buffers of size sizeof(T[numel])
+        static int GetGrowthStep(std::size_t numel);
+
+        // Get the number of unallocated blocks in the pool that holds buffers of size sizeof(T[numel])
+        static std::size_t GetPoolFree(std::size_t numel);
+
+        // Get the total number of blocks (allocated and unallocat3ed) in the pool that holds buffers of size sizeof(T[numel])
+        static std::size_t GetPoolCapacity(std::size_t numel);
 
         // static version of allocate() for use by NewArray()
-        static T* Allocate(size_t n);
+        static T* Allocate(std::size_t numel);
 
         // static version of deallocate() for use by DeleteArray()
-        static void Deallocate(T* ptr, size_t n);
+        static void Deallocate(T* ptr, std::size_t numel);
 
-        static SharedPointer<T> NewArray(size_t n);
+        //-----------------
+        // SharedPtr construction functions
+        //-----------------
 
+        /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
+        /// and construted by T()
+        static SharedPointer<T> NewArray(std::size_t numel);
+
+        /// return a SharedPointer that points to an object of type T allocated from pooled memory.
+        /// and construted by T()
         static SharedPointer<T> New();
 
+        /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
+        /// and construted by T(a1)
         template<typename A1>
-        static SharedPointer<T> NewArray(size_t n, A1 a1);
+        static SharedPointer<T> NewArray(std::size_t numel, A1 a1);
 
+        /// return a SharedPointer that points to an object of type T allocated from pooled memory
+        /// and construted by T(a1)
         template<typename A1>
         static SharedPointer<T> New(A1 a1);
 
+        /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
+        /// and construted by T(a1,a2)
         template<typename A1, typename A2>
-        static SharedPointer<T> NewArray(size_t n, A1 a1, A2 a2);
+        static SharedPointer<T> NewArray(std::size_t numel, A1 a1, A2 a2);
 
+        /// return a SharedPointer that points to an object of type T allocated from pooled memory
+        /// and construted by T(a1,a2)
         template<typename A1, typename A2>
         static SharedPointer<T> New(A1 a1, A2 a2);
 
+        /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
+        /// and construted by T(a1,a2,a3)
         template<typename A1, typename A2, typename A3>
-        static SharedPointer<T> NewArray(size_t n, A1 a1, A2 a2, A3 a3);
+        static SharedPointer<T> NewArray(std::size_t numel, A1 a1, A2 a2, A3 a3);
 
+        /// return a SharedPointer that points to an object of type T allocated from pooled memory
+        /// and construted by T(a1,a2,a3)
         template<typename A1, typename A2, typename A3>
         static SharedPointer<T> New(A1 a1, A2 a2, A3 a3);
 
-        // Destroy and deallocate a block allocated from pool that contains n objects of type T.
-        // should not be necessary, since all normally allocated objects are wrapped in SharedPointers
-        // Note: specifying a value of n different than the value used in NewArray() will cause things to catch on fire.
-        static void DeleteArray(size_t n, T* ptr);
+    private:
 
-        // Return a function object that will call this->Delete(n,ptr);
-        // the returned object can be used as a Deleter argument in a shared_ptr constructor.
-        static c11::function<void(T*)> GetArrayDeleter(size_t n);
+        // Destroy and deallocate a block allocated from pool that contains an array of T[numel]
+        // should not be necessary, since all normally allocated objects are wrapped in SharedPointers
+        // Note: specifying a value of numel different than the value used in NewArray() will cause things to catch on fire.
+        static void DeleteArray(std::size_t numel, T* ptr);
 
         // Destroy and deallocate a block allocated from pool that contains a single object of type T
         // This static function can be used as a Deleter argument in a shared_ptr constructor.
         // specify as 'PoolAllocator<T>::Delete';
         static void Delete(T* ptr);
+
+        // Return a function object that will call this->Delete(numel,ptr);
+        // the returned object can be used as a Deleter argument in a shared_ptr constructor.
+        static c11::function<void(T*)> GetArrayDeleter(std::size_t numel);
 
         // return a pointer to Delete(T* ptr);
         // The returned object can be used as a Deleter argument in a shared_ptr constructor.

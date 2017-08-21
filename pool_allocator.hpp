@@ -9,12 +9,76 @@
 
 namespace ldl {
 
+    //---------------------
+    template<typename T>
+    void PooledNew<T>::ResizePool(std::size_t num_blocks)
+    {
+        pool_.Resize(num_blocks);
+    }
+
+
+    //---------------------
+    template<typename T>
+    void PooledNew<T>::SetPoolGrowthStep(int growth_step)
+    {
+        pool_.SetGrowthStep(growth_step);
+    }
+
+    //---------------------
+    template<typename T>
+    int PooledNew<T>::GetPoolGrowthStep()
+    {
+        return pool_.GetGrowthStep();
+    }
+
+    //---------------------
+    template<typename T>
+    std::size_t PooledNew<T>::GetPoolBlockSize()
+    {
+        return block_size;
+    }
+
+    //---------------------
+    template<typename T>
+    std::size_t PooledNew<T>::GetPoolFree()
+    {
+        return pool_.GetFree();
+    }
+
+    //---------------------
+    template<typename T>
+    std::size_t PooledNew<T>::GetPoolCapacity()
+    {
+        return pool_.GetCapacity();
+    }
+
+    //---------------------
+    template<typename T>
+    void* PooledNew<T>::operator new(std::size_t nbytes)
+    {
+        if (nbytes != pool_.GetBlockSize()) { throw std::bad_alloc(); }
+        return pool_.Pop();
+    }
+
+    //---------------------
+    template<typename T>
+    void PooledNew<T>::operator delete(void* ptr)
+    {
+        pool_.Push(ptr);
+    }
+
+    //---------------------
+    template<typename T>
+    Pool PooledNew<T>::pool_(sizeof(T), 0, 0); // empty buffer
+
+    //==========================================
+
     //--------------
     template<typename T>
     template<typename U>
     PoolAllocator<T>::PoolAllocator(const PoolAllocator<U>& other)
     {
-        // nothing to do
+        // nothing to do (all member variables are static)
     }
 
     //--------------
@@ -22,7 +86,7 @@ namespace ldl {
     template<typename U>
     PoolAllocator<T>& PoolAllocator<T>::operator=(const PoolAllocator<U>& other)
     {
-        // nothing to do
+        // nothing to do (all member variables are static)
     }
 
     //--------------
@@ -43,7 +107,7 @@ namespace ldl {
     template<typename T>
     size_t PoolAllocator<T>::max_size() const
     {
-        return s.MAX_POOLS / sizeof(T);
+        return pool_list_.MAX_BLOCK_SIZE / sizeof(T);
     }
 
     //--------------
@@ -51,7 +115,7 @@ namespace ldl {
     void PoolAllocator<T>::construct(T* ptr, const T& val) const
     {
         if (ptr) {
-            new((void*)ptr) T(val);
+            new(static_cast<void*>(ptr)) T(val);
         }
     }
 
@@ -65,74 +129,78 @@ namespace ldl {
     }
 
     template<typename T>
-    T* PoolAllocator<T>::allocate(size_t n, const void* hint = 0)
+    T* PoolAllocator<T>::allocate(size_t numel, const void* hint)
     {
-        return Allocate(n); // call static function
+        return Allocate(numel); // call static member function
     }
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::deallocate(T* ptr, size_t n)
+    void PoolAllocator<T>::deallocate(T* ptr, size_t numel)
     {
-        Deallocate(ptr, n); // call static function
+        Deallocate(ptr, numel); // call static member function
     }
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::SetGrowthStep(size_t n, int growth_step)
+    void PoolAllocator<T>::ResizePool(size_t numel, size_t num_blocks)
     {
-        PoolList::SetGrowthStep(n * sizeof(T), growth_step);
+        pool_list_.ResizePool(numel * sizeof(T), num_blocks);
     }
 
     //--------------
     template<typename T>
-    int PoolAllocator<T>::GetGrowthStep(size_t n)
+    void PoolAllocator<T>::SetGrowthStep(size_t numel, int growth_step)
     {
-        return PoolList::GetGrowthStep(n * sizeof(T));
+        pool_list_.SetGrowthStep(numel * sizeof(T), growth_step);
     }
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::ResizePool(size_t n, size_t new_capacity)
+    int PoolAllocator<T>::GetGrowthStep(size_t numel)
     {
-        PoolList::ResizePool(n * sizeof(T), new_capacity);
+        return pool_list_.GetGrowthStep(numel * sizeof(T));
     }
 
     //--------------
     template<typename T>
-    size_t PoolAllocator<T>::GetPoolSize(size_t n)
+    size_t PoolAllocator<T>::GetPoolFree(size_t numel)
     {
-        return PoolList::GetPoolSize(n * sizeof(T));
+        return pool_list_.GetPoolFree(numel * sizeof(T));
+    }
+    //--------------
+    template<typename T>
+    size_t PoolAllocator<T>::GetPoolCapacity(size_t numel)
+    {
+        return pool_list_.GetPoolCapacity(numel * sizeof(T));
     }
 
     //--------------
     template<typename T>
-    T* PoolAllocator<T>::Allocate(size_t n)
+    T* PoolAllocator<T>::Allocate(size_t numel)
     {
-        if (n == 0) {
-            throw std::runtime_error("error");
+        if (numel == 0) { throw std::bad_alloc(); }
+        return static_cast<T*>(pool_list_.Pop(numel * sizeof(T)));
+    }
+
+    //--------------
+    template<typename T>
+    void PoolAllocator<T>::Deallocate(T* ptr, size_t numel)
+    {
+        if (ptr && numel) {
+            pool_list_.Push(numel * sizeof(T), static_cast<void*>(ptr));
         }
-        return static_cast<T*>(Pop(n * sizeof(T)));
     }
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::Deallocate(T* ptr, size_t n)
+    SharedPointer<T> PoolAllocator<T>::NewArray(size_t numel)
     {
-        if (ptr && n) {
-            Push(n * sizeof(T), static_cast<void*>(ptr));
+        T* ptr = Allocate(numel);
+        for (size_t ix = 0; ix < numel; ++ix) {
+            new(static_cast<void*>(ptr + ix)) T();
         }
-    }
-
-    //--------------
-    template<typename T>
-    SharedPointer<T> PoolAllocator<T>::NewArray(size_t n)
-    {
-        T* ptr = Allocate(n);
-        for (size_t ix = 0; ix < n; ++ix) {
-            new((void*)(ptr + ix)) T();
-        }
-        return SharedPointer<T>(ptr, GetArrayDeleter(n));
+        return SharedPointer<T>(ptr, GetArrayDeleter(numel));
     }
 
     //--------------
@@ -145,13 +213,13 @@ namespace ldl {
     //--------------
     template<typename T>
     template<typename A1>
-    SharedPointer<T> PoolAllocator<T>::NewArray(size_t n, A1 a1)
+    SharedPointer<T> PoolAllocator<T>::NewArray(size_t numel, A1 a1)
     {
-        T* ptr = Allocate(n);
-        for (size_t ix = 0; ix < n; ++ix) {
-            new((void*)(ptr + ix)) T(a1);
+        T* ptr = Allocate(numel);
+        for (size_t ix = 0; ix < numel; ++ix) {
+            new(static_cast<void*>(ptr + ix)) T(a1);
         }
-        return SharedPointer<T>(ptr, GetArrayDeleter(n));
+        return SharedPointer<T>(ptr, GetArrayDeleter(numel));
     }
 
     //--------------
@@ -165,13 +233,13 @@ namespace ldl {
     //--------------
     template<typename T>
     template<typename A1, typename A2>
-    SharedPointer<T> PoolAllocator<T>::NewArray(size_t n, A1 a1, A2 a2)
+    SharedPointer<T> PoolAllocator<T>::NewArray(size_t numel, A1 a1, A2 a2)
     {
-        T* ptr = Allocate(n);
-        for (size_t ix = 0; ix < n; ++ix) {
-            new((void*)(ptr + ix)) T(a1, a2);
+        T* ptr = Allocate(numel);
+        for (size_t ix = 0; ix < numel; ++ix) {
+            new(static_cast<void*>(ptr + ix)) T(a1, a2);
         }
-        return SharedPointer<T>(ptr, GetArrayDeleter(n));
+        return SharedPointer<T>(ptr, GetArrayDeleter(numel));
     }
 
     //--------------
@@ -185,13 +253,13 @@ namespace ldl {
     //--------------
     template<typename T>
     template<typename A1, typename A2, typename A3>
-    SharedPointer<T> PoolAllocator<T>::NewArray(size_t n, A1 a1, A2 a2, A3 a3)
+    SharedPointer<T> PoolAllocator<T>::NewArray(size_t numel, A1 a1, A2 a2, A3 a3)
     {
-        T* ptr = Allocate(n);
-        for (size_t ix = 0; ix < n; ++ix) {
-            new((void*)(ptr + ix)) T(a1, a2, a3);
+        T* ptr = Allocate(numel);
+        for (size_t ix = 0; ix < numel; ++ix) {
+            new(static_cast<void*>(ptr + ix)) T(a1, a2, a3);
         }
-        return SharedPointer<T>(ptr, GetArrayDeleter(n));
+        return SharedPointer<T>(ptr, GetArrayDeleter(numel));
     }
 
     //--------------
@@ -204,21 +272,14 @@ namespace ldl {
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::DeleteArray(size_t n, T* ptr)
+    void PoolAllocator<T>::DeleteArray(size_t numel, T* ptr)
     {
         if (ptr) {
-            for (size_t ix = 0; ix < n; ++ix) {
+            for (size_t ix = 0; ix < numel; ++ix) {
                 ptr[ix].~T();
             }
-            Deallocate(ptr, n);
+            Deallocate(ptr, numel);
         }
-    }
-
-    //--------------
-    template<typename T>
-    c11::function<void(T*)> PoolAllocator<T>::GetArrayDeleter(size_t n = 1)
-    {
-        return c11::bind(DeleteArray, n, _1);
     }
 
     //--------------
@@ -226,6 +287,13 @@ namespace ldl {
     void PoolAllocator<T>::Delete(T* ptr)
     {
         DeleteArray(1, ptr);
+    }
+
+    //--------------
+    template<typename T>
+    c11::function<void(T*)> PoolAllocator<T>::GetArrayDeleter(size_t numel)
+    {
+        return c11::bind(DeleteArray, numel, _1);
     }
 
     //--------------
