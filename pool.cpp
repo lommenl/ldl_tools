@@ -34,8 +34,8 @@ namespace ldl {
                 std::allocator<c11::uint64_t>().deallocate(static_cast<c11::uint64_t*>(stack_[ix]), (block_size_+7)/8);
             }
 #ifdef _DEBUG
-        std::cout << "called std::allocator<uint64_t>().deallocate(ptr," << (block_size_+7)/8 << ") "
-            << tos_ << " times" << std::endl;
+        std::cout << "Called std::allocator<uint64_t>().deallocate(ptr," << (block_size_ + 7) / 8 << ") ("
+            << block_size_ << " bytes) " << tos_ << " times" << std::endl;
 #endif
         }
     }
@@ -152,6 +152,9 @@ namespace ldl {
                 }
             }
             retval = stack_[--tos_]; // get ptr from front of stack
+#ifdef _DEBUG
+            std::cout << "-->Popped a(n) " << block_size_ << " byte block" << std::endl;
+#endif //_DEBUG
         }
         return retval;
     }
@@ -166,6 +169,9 @@ namespace ldl {
             }
             if (ptr) {
                 stack_[tos_++] = ptr;
+#ifdef _DEBUG
+                std::cout << "<--Pushed a(n) " << block_size_ << " byte block" << std::endl;
+#endif //_DEBUG
             }
         }
     }
@@ -180,8 +186,8 @@ namespace ldl {
             stack_[tos_++] = static_cast<void*>(std::allocator<c11::uint64_t*>().allocate((block_size_+7)/8));
         }
 #ifdef _DEBUG
-        std::cout << "called std::allocator<uint64_t>().allocate(" << block_size_ << ") "
-            << num_blocks << " times" << std::endl;
+        std::cout << "Called std::allocator<uint64_t>().allocate(" << (block_size_ + 7) / 8 << ") ("
+            << block_size_ << " bytes) " << num_blocks << " times" << std::endl;
 #endif
     }
 
@@ -193,19 +199,22 @@ namespace ldl {
         if (block_size == 0 || block_size > MAX_BLOCK_SIZE ) {
             throw std::runtime_error("Invalid block_size argument");
         }
+        // round block_size up to nearest multple of 8. (multiple block sizes will map to one pool)
+        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
         //lock while accessing pool_map_
         c11::lock_guard<c11::mutex> lock(mutex_);
-        if (pool_map_.count(block_size) == 0) { // pool doesn't exist
+        if (pool_map_.count(rounded_block_size) == 0) { // pool doesn't exist
             // construct a new Pool object
-            pool_map_[block_size].Initialize(block_size, 0, default_growth_step_); // empty pool
+            pool_map_[rounded_block_size].Initialize(rounded_block_size, 0, default_growth_step_); // empty pool
         }
-        return pool_map_.at(block_size);
+        return pool_map_.at(rounded_block_size);
     }
 
     //--------------
     void PoolList::IncreasePoolSize(std::size_t block_size, std::size_t num_blocks)
     {
-        GetPool(block_size).IncreaseSize(num_blocks); // GetPool() may create the pool
+        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
+        GetPool(rounded_block_size).IncreaseSize(num_blocks); // GetPool() may create the pool
     }
 
     //--------------
@@ -222,7 +231,8 @@ namespace ldl {
             }
         }
         else { //set only pool_list[block_size]
-            GetPool(block_size).SetGrowthStep(growth_step); // GetPool() may create the pool
+            std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
+            GetPool(rounded_block_size).SetGrowthStep(growth_step); // GetPool() may create the pool
         }
     }
 
@@ -232,8 +242,9 @@ namespace ldl {
         //lock while accessing growth_step_
         c11::lock_guard<c11::mutex> lock(mutex_);
         int retval = default_growth_step_;
-        if (pool_map_.count(block_size)) { // don't create a pool if it doesn't already exist
-            retval = GetPool(block_size).GetGrowthStep();
+        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
+        if (pool_map_.count(rounded_block_size)) { // don't create a pool if it doesn't already exist
+            retval = GetPool(rounded_block_size).GetGrowthStep();
         }
         return retval;
     }
@@ -243,8 +254,9 @@ namespace ldl {
     {
         // Pool will ensure its own thread safety.
         std::size_t retval = 0;
-        if (pool_map_.count(block_size)) { // dont create a pool if it doesn't already exist
-            retval = GetPool(block_size).GetFree();
+        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
+        if (pool_map_.count(rounded_block_size)) { // dont create a pool if it doesn't already exist
+            retval = GetPool(rounded_block_size).GetFree();
         }
         return retval;
     }
@@ -253,8 +265,9 @@ namespace ldl {
     std::size_t PoolList::GetPoolSize(std::size_t block_size)
     {
         std::size_t retval = 0;
-        if (pool_map_.count(block_size)) { // dont create a pool if it doesn't already exist
-            retval = GetPool(block_size).GetSize();
+        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
+        if (pool_map_.count(rounded_block_size)) { // dont create a pool if it doesn't already exist
+            retval = GetPool(rounded_block_size).GetSize();
         }
         return retval;
     }

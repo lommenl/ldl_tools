@@ -8,6 +8,8 @@ namespace ldl {
     /// Class defining a pointer that allows it to be used in a LinkedList object.
     template<typename T>
     class Linkable {
+    public:
+        Linkable() : next_ptr_(0) {}
     private:
         /// allow LinkedList to access next_ptr_
         template<typename U>

@@ -17,6 +17,9 @@ BOOST_AUTO_TEST_CASE( linked_list_test )
         std::cout << "Starting linked_list_test" << std::endl;
         std::cout << "============================" << std::endl;
 
+        // x = 4 bytes, next_ptr_ = 8 bytes + 4 bytes of alignment padding
+        BOOST_CHECK_EQUAL(sizeof(bar), 16);
+
         bar::SetPoolGrowthStep(10);
 
         ldl::LinkedList<bar> blist;

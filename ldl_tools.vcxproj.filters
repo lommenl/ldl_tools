@@ -36,6 +36,9 @@
     <ClCompile Include="shared_pointer_test.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="pooled_array_test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pool_allocator.h">
@@ -69,6 +72,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="pooled_new.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pooled_array.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pooled_array.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

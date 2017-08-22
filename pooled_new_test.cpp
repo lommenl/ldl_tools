@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE( pooled_new_test )
             BOOST_CHECK_EQUAL(a1[ix].x, 100+ix);
         }
 
-        delete a1;
+        delete[] a1;
 
         std::cout << "done" << std::endl;
     }
