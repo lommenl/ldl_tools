@@ -3,6 +3,7 @@
 #define LDL_POOL_ALLOCATOR_H_
 
 #include "pool.h" // StaticPoolList
+#include "shared_pointer.h"
 
 #include <functional> // std::function
 namespace c11 {
@@ -85,20 +86,17 @@ namespace ldl {
         void deallocate(T* ptr, std::size_t numel);
 
         //-----------------
-        // PoolList functions
+        // PoolList static functions
         //-----------------
 
-        // Set size of pool hold num_blocks buffers
-        static void SetPoolSize(std::size_t numel, std::size_t num_blocks);
-
-        // Increase the size of a pool by num_blocks.
+        // Increase the size of pool[numel] by num_blocks.
         static void IncreasePoolSize(std::size_t numel, std::size_t num_blocks);
         
         // set the growth_step for the pool that holds buffers of size sizeof(T[numel])
-        static void SetGrowthStep(std::size_t numel, int growth_step);
+        static void SetPoolGrowthStep(std::size_t numel, int growth_step);
 
         // get the growth_step for the pool that holds buffers of size sizeof(T[numel])
-        static int GetGrowthStep(std::size_t numel);
+        static int GetPoolGrowthStep(std::size_t numel);
 
         // Get the number of unallocated blocks in the pool that holds buffers of size sizeof(T[numel])
         static std::size_t GetPoolFree(std::size_t numel);
@@ -118,31 +116,31 @@ namespace ldl {
 
         /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
         /// and construted by T()
-        static SharedPointer<T> NewArray(std::size_t numel);
+        static typename SharedPointer<T> NewArray(std::size_t numel);
 
         /// return a SharedPointer that points to an object of type T allocated from pooled memory.
         /// and construted by T()
-        static SharedPointer<T> New();
+        static typename SharedPointer<T> New();
 
         /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
         /// and construted by T(a1)
         template<typename A1>
-        static SharedPointer<T> NewArray(std::size_t numel, A1 a1);
+        static typename SharedPointer<T> NewArray(std::size_t numel, A1 a1);
 
         /// return a SharedPointer that points to an object of type T allocated from pooled memory
         /// and construted by T(a1)
         template<typename A1>
-        static SharedPointer<T> New(A1 a1);
+        static typename SharedPointer<T> New(A1 a1);
 
         /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
         /// and construted by T(a1,a2)
         template<typename A1, typename A2>
-        static SharedPointer<T> NewArray(std::size_t numel, A1 a1, A2 a2);
+        static typename SharedPointer<T> NewArray(std::size_t numel, A1 a1, A2 a2);
 
         /// return a SharedPointer that points to an object of type T allocated from pooled memory
         /// and construted by T(a1,a2)
         template<typename A1, typename A2>
-        static SharedPointer<T> New(A1 a1, A2 a2);
+        static typename SharedPointer<T> New(A1 a1, A2 a2);
 
         /// return a SharedPointer that points to an array of T[numel] allocated from pooled memory
         /// and construted by T(a1,a2,a3)

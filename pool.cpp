@@ -5,7 +5,6 @@
 #include <memory> //std::allocator
 #include <algorithm> // std::max
 
-#include <cstdint> //std::uint8_t
 namespace c11 {
     using namespace std;
 }
@@ -32,10 +31,10 @@ namespace ldl {
         if (mutex_ptr_) { // object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
             for (std::size_t ix = 0; ix < tos_; ++ix) {
-                std::allocator<c11::uint8_t>().deallocate(static_cast<c11::uint8_t*>(stack_[ix]), block_size_);
+                std::allocator<c11::uint64_t>().deallocate(static_cast<c11::uint64_t*>(stack_[ix]), (block_size_+7)/8);
             }
 #ifdef _DEBUG
-        std::cout << "called std::allocator<uint8_t>().deallocate(ptr," << block_size_ << ") "
+        std::cout << "called std::allocator<uint64_t>().deallocate(ptr," << (block_size_+7)/8 << ") "
             << tos_ << " times" << std::endl;
 #endif
         }
@@ -78,20 +77,11 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::SetSize(std::size_t num_blocks)
-    {
-        if (mutex_ptr_) { //object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            NoLockSetSize(num_blocks);
-        }
-    }
-
-    //-----------------
     void Pool::IncreaseSize(std::size_t num_blocks)
     {
         if (mutex_ptr_) { //object is valid
             c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            NoLockSetSize( stack_.size() + num_blocks);
+            NoLockIncreaseSize( stack_.size() + num_blocks);
         }
     }
 
@@ -152,10 +142,10 @@ namespace ldl {
             if (tos_ == 0) { //if stack is empty
                 if (growth_step_ > 0) { // growth_step is an increment
                     //  add growth_step_ elements to stack_
-                    NoLockSetSize(stack_.size() + static_cast<std::size_t>(growth_step_));
+                    NoLockIncreaseSize(static_cast<std::size_t>(growth_step_));
                 }
                 else if (growth_step_ < 0) { // growth step is negative inverse of a scale factor. (e.g. -3 = a scale factor of 1/3
-                    NoLockSetSize(stack_.size() + std::max<std::size_t>(1, stack_.size()/static_cast<std::size_t>(-growth_step_)));
+                    NoLockIncreaseSize(std::max<std::size_t>(1, stack_.size()/static_cast<std::size_t>(-growth_step_)));
                 }
                 else { // growth_step == 0 // no growth allowed
                     throw std::bad_alloc();
@@ -181,20 +171,17 @@ namespace ldl {
     }
 
     //-----------------
-    void Pool::NoLockSetSize(std::size_t num_blocks)
+    void Pool::NoLockIncreaseSize(std::size_t num_blocks)
     {
-        std::size_t old_capacity = stack_.size();
-        if (num_blocks <= old_capacity) {
-            return;
-        }
-        stack_.resize(num_blocks);
-        for (std::size_t ix = old_capacity; ix < num_blocks; ++ix) {
+        stack_.resize(stack_.size() + num_blocks );
+        for (std::size_t ix = 0; ix < num_blocks; ++ix) {
             // for each new element allocate raw memory from the heap and push it onto the stack
-            stack_[tos_++] = static_cast<void*>(std::allocator<c11::uint8_t*>().allocate(block_size_));
+            // allocate uint64_t to get 64-bit alignment for all blocks (round up)
+            stack_[tos_++] = static_cast<void*>(std::allocator<c11::uint64_t*>().allocate((block_size_+7)/8));
         }
 #ifdef _DEBUG
-        std::cout << "called std::allocator<uint8_t>().allocate(" << block_size_ << ") "
-            << (num_blocks - old_capacity) << " times" << std::endl;
+        std::cout << "called std::allocator<uint64_t>().allocate(" << block_size_ << ") "
+            << num_blocks << " times" << std::endl;
 #endif
     }
 
@@ -208,7 +195,7 @@ namespace ldl {
         }
         //lock while accessing pool_map_
         c11::lock_guard<c11::mutex> lock(mutex_);
-        if (pool_map_.count(block_size) == 0) {
+        if (pool_map_.count(block_size) == 0) { // pool doesn't exist
             // construct a new Pool object
             pool_map_[block_size].Initialize(block_size, 0, default_growth_step_); // empty pool
         }
@@ -216,19 +203,13 @@ namespace ldl {
     }
 
     //--------------
-    void PoolList::SetPoolSize(std::size_t block_size, std::size_t num_blocks)
-    {
-        GetPool(block_size).SetSize(num_blocks); // may create the pool
-    }
-
-    //--------------
     void PoolList::IncreasePoolSize(std::size_t block_size, std::size_t num_blocks)
     {
-        GetPool(block_size).IncreaseSize(num_blocks); // may create the pool
+        GetPool(block_size).IncreaseSize(num_blocks); // GetPool() may create the pool
     }
 
     //--------------
-    void PoolList::SetGrowthStep(std::size_t block_size, int growth_step)
+    void PoolList::SetPoolGrowthStep(std::size_t block_size, int growth_step)
     {
         if (block_size == 0) { // set default, and all pools
             //lock while accessing default_growth_step_ and pool_map_
@@ -241,17 +222,17 @@ namespace ldl {
             }
         }
         else { //set only pool_list[block_size]
-            GetPool(block_size).SetGrowthStep(growth_step); // may create the pool
+            GetPool(block_size).SetGrowthStep(growth_step); // GetPool() may create the pool
         }
     }
 
     //--------------
-    int PoolList::GetGrowthStep(std::size_t block_size)
+    int PoolList::GetPoolGrowthStep(std::size_t block_size)
     {
         //lock while accessing growth_step_
         c11::lock_guard<c11::mutex> lock(mutex_);
         int retval = default_growth_step_;
-        if (pool_map_.count(block_size)) { // don't create a pool if it doesn't exist
+        if (pool_map_.count(block_size)) { // don't create a pool if it doesn't already exist
             retval = GetPool(block_size).GetGrowthStep();
         }
         return retval;
@@ -262,7 +243,7 @@ namespace ldl {
     {
         // Pool will ensure its own thread safety.
         std::size_t retval = 0;
-        if (pool_map_.count(block_size)) { // dont create a pool if it doesn't exist
+        if (pool_map_.count(block_size)) { // dont create a pool if it doesn't already exist
             retval = GetPool(block_size).GetFree();
         }
         return retval;
@@ -272,7 +253,7 @@ namespace ldl {
     std::size_t PoolList::GetPoolSize(std::size_t block_size)
     {
         std::size_t retval = 0;
-        if (pool_map_.count(block_size)) { // dont create a pool if it doesn't exist
+        if (pool_map_.count(block_size)) { // dont create a pool if it doesn't already exist
             retval = GetPool(block_size).GetSize();
         }
         return retval;
@@ -281,13 +262,13 @@ namespace ldl {
     //--------------
     void* PoolList::Pop(std::size_t block_size)
     {
-        return GetPool(block_size).Pop();
+        return GetPool(block_size).Pop(); // GetPool() may create the pool
     }
 
     //--------------
     void PoolList::Push(std::size_t block_size, void* ptr)
     {
-        GetPool(block_size).Push(ptr);
+        GetPool(block_size).Push(ptr); // GetPool() may create the pool
     }
 
     //==================================================

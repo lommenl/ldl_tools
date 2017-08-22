@@ -30,10 +30,7 @@ namespace ldl {
         // initialize a default constructed object 
         void Initialize(std::size_t block_size, std::size_t num_blocks, int growth_step);
 
-        /// Set size of stack_ to hold num_blocks blocks.
-        void SetSize(std::size_t num_blocks);
-
-        /// increase stack_ size by num_blocks blocks.
+        /// Increase stack_ size by num_blocks blocks.
         void IncreaseSize(std::size_t num_blocks);
 
         /// Set number of blocks to automatically add to stack_ if it becomes empty.
@@ -69,8 +66,8 @@ namespace ldl {
         Pool(const Pool&) = delete;
         Pool& operator=(const Pool&) = delete;
 
-        // Set size of stack_ without locking mutex (assume it's already locked)
-        void NoLockSetSize(std::size_t num_blocks);
+        // increase size of stack_ without locking mutex (assume it's already locked)
+        void NoLockIncreaseSize(std::size_t num_blocks);
 
         //----
 
@@ -93,7 +90,7 @@ namespace ldl {
     }; // class Pool
 
     //---------------------------------
-    // class that manages multiple pools of different sizes.
+    /// Class that manages multiple pools of different sizes.
     class PoolList {
     public:
         // Default constructor
@@ -112,23 +109,20 @@ namespace ldl {
         /// Will create an empty pool with default_growth_step if it doesn't already exist.
         Pool& GetPool(std::size_t block_size);
 
-        /// Set the size of pool_list[block_size] to hold num_blocks blocks.
-        void SetPoolSize(std::size_t block_size, std::size_t num_blocks);
-
-        /// Set the size of pool_list[block_size] to hold num_blocks blocks.
+        /// increase the size of pool_list[block_size] by num_blocks blocks.
         void IncreasePoolSize(std::size_t block_size, std::size_t num_blocks);
 
         // Set the number of blocks to add to pool_list[block_size] if it becomes empty.
         // using block_size = 0 sets the growth_step value for all current and future pools.
         // Otherwise only the value of pool_list[block_size] is set.
-        // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty
+        // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty.
         // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
         // setting growth_step = 0 disables automatic growth of a pool.
-        void SetGrowthStep(std::size_t block_size, int growth_step);
+        void SetPoolGrowthStep(std::size_t block_size, int growth_step);
 
         // Return the number of blocks that will be added to pool_list[block_size] if it becomes empty.
         // setting block_size=0 returns the default value that will be assigned to new pools when they are created.
-        int GetGrowthStep(std::size_t block_size);
+        int GetPoolGrowthStep(std::size_t block_size);
 
         // return current number of unallocated blocks in pool_list[block_size]
         std::size_t GetPoolFree(std::size_t block_size);
@@ -161,6 +155,8 @@ namespace ldl {
 
     //-----------------
     /// Class declaring a static PoolList
+    /// All classes that inherit from this class will share the same 
+    /// PoolList
     class StaticPoolList {
     protected:
         static PoolList pool_list_;

@@ -79,13 +79,6 @@ namespace ldl {
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::SetPoolSize(size_t numel, size_t num_blocks)
-    {
-        pool_list_.SetPoolSize(numel * sizeof(T), num_blocks);
-    }
-
-    //--------------
-    template<typename T>
     void PoolAllocator<T>::IncreasePoolSize(size_t numel, size_t num_blocks)
     {
         pool_list_.IncreasePoolSize(numel * sizeof(T), num_blocks);
@@ -93,16 +86,16 @@ namespace ldl {
 
     //--------------
     template<typename T>
-    void PoolAllocator<T>::SetGrowthStep(size_t numel, int growth_step)
+    void PoolAllocator<T>::SetPoolGrowthStep(size_t numel, int growth_step)
     {
-        pool_list_.SetGrowthStep(numel * sizeof(T), growth_step);
+        pool_list_.SetPoolGrowthStep(numel * sizeof(T), growth_step);
     }
 
     //--------------
     template<typename T>
-    int PoolAllocator<T>::GetGrowthStep(size_t numel)
+    int PoolAllocator<T>::GetPoolGrowthStep(size_t numel)
     {
-        return pool_list_.GetGrowthStep(numel * sizeof(T));
+        return pool_list_.GetPoolGrowthStep(numel * sizeof(T));
     }
 
     //--------------
