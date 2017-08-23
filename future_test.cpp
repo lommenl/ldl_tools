@@ -26,12 +26,13 @@ BOOST_AUTO_TEST_CASE( future_test )
 
     try {
 
-        ldl::FutureState<int> state;
+        // allocate space for one state
+        ldl::FutureState<int>::IncreasePoolSize(1);
 
-        ldl::Promise<int> prom(&state);
+        ldl::Promise<int> prom;
 
         ldl::Future<int> fut;
-        fut.swap(prom.get_future()); // move assignment
+        fut.swap(prom.get_future()); // move assignment via swap
 
         // spawn thread
         c11::thread th(c11::bind(promise_thread, &prom, 1));
@@ -43,7 +44,7 @@ BOOST_AUTO_TEST_CASE( future_test )
         th.join();
 
         //repeat
-        ldl::Promise<int> prom2(&state);
+        ldl::Promise<int> prom2;
 
         ldl::Future<int> fut2;
         fut2.swap(prom2.get_future()); // move assignment

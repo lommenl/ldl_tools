@@ -6,15 +6,28 @@
 
 namespace ldl {
 
+
+    //---------------
+    template<typename T>
+    FutureState<T>::FutureState()
+        : notified(false)
+        , value_set(false)
+    {
+        // if necessary, set PooledNew element size
+        if (GetElementSize() == 0) {
+            SetElementSize(sizeof(FutureState<T>));
+        }
+    }
+
     //---------------
     template<typename T>
     Future<T>::Future()
-        : state_ptr_(0)
+        : state_ptr_(nullptr)
     {}
 
     //---------------
     template<typename T>
-    Future<T>::Future(FutureState<T>* state_ptr)
+    Future<T>::Future(SharedPointer<FutureState<T>>& state_ptr)
         : state_ptr_(state_ptr)
     {}
 
@@ -22,20 +35,23 @@ namespace ldl {
     template<typename T>
     void Future<T>::swap(Future& other) {
         if (this != &other) {
-            std::swap(state_ptr_, other.state_ptr_);
+            state_ptr_.swap(other.state_ptr_);
         }
     }
 
     //---------------
     template<typename T>
     bool Future<T>::valid() const {
-        return  (state_ptr_ != 0);
+        return  (bool)state_ptr_;
     }
 
     //---------------
     template<typename T>
     T Future<T>::get()
     {
+        if (!valid()) {
+            throw std::runtime_error("Future is not valid"); 
+        }
         wait();
         return state_ptr_->value;
     }
@@ -82,29 +98,13 @@ namespace ldl {
 
     //---------------
     template<typename T>
-    FutureState<T>* Future<T>::GetFutureState() const
-    {
-        return state_ptr_;
-    }
-
-    //---------------
-    template<typename T>
     Promise<T>::Promise()
-        : state_ptr_(0)
-        , future_constructed_(false)
-    {}
-
-    //---------------
-    template<typename T>
-    Promise<T>::Promise(FutureState<T>* state_ptr)
-        : state_ptr_(state_ptr)
+        : state_ptr_(new FutureState<T>()) // Q: Does shared_ptr need a mutex?
         , future_constructed_(false)
     {
-        if (!state_ptr_) {
-            throw std::runtime_error("invalid state_ptr");
+        if (GetElementSize() == 0) {
+            SetElementSize(sizeof(Promise<T>));
         }
-        state_ptr_->value_set = false;
-        state_ptr_->notified = false;
     }
 
     //---------------
@@ -112,7 +112,7 @@ namespace ldl {
     Promise<T>::~Promise()
     {
         if (state_ptr_ ) {
-            // notify cv in case Future object is waiting.
+            // notify state_ptr_->cv in case a Future object is waiting.
             state_ptr_->notified = true;
             state_ptr_->cv.notify_one();
         }
@@ -123,7 +123,7 @@ namespace ldl {
     void Promise<T>::swap(Promise& other)
     {
         if (this != &other) {
-            std::swap(state_ptr_, other.state_ptr_);
+            state_ptr_.swap(other.state_ptr_);
             std::swap(future_constructed_, other.future_constructed_);
         }
     }

@@ -2,6 +2,9 @@
 #ifndef  PROMISE_FUTURE_H_
 #define  PROMISE_FUTURE_H_
 
+#include "pooled_new.h"
+#include "shared_pointer.h"
+
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
@@ -12,10 +15,9 @@ namespace c11 {
 namespace ldl {
 
     //-------------
-    // Class that defines the state shared between a Promise object and a Future object.
-    // These objects can be statically allocated and re-used.
     template<typename T>
-    struct FutureState {
+    struct FutureState : public PooledNew<TemplateClass> {
+        //need to set PooledNew::element_size explicitly.
 
         // synchronization condition_variable
         c11::condition_variable cv;
@@ -30,6 +32,10 @@ namespace ldl {
 
         // shared value
         T value;
+
+        // default constructor
+        FutureState();
+
     };
 
     //-------------
@@ -77,9 +83,6 @@ namespace ldl {
         template< typename Rep, typename Period>
         FutureStatus::type wait_for(const c11::chrono::duration<Rep, Period>& rel_time);
 
-        // get state_ptr so it can be re-used.
-        FutureState<T>* GetFutureState() const;
-
     private:
 
         // no copying
@@ -91,25 +94,23 @@ namespace ldl {
         friend class Promise;
 
         // Construct an object with the specified shared state.
-        Future(FutureState<T>* state_ptr);
+        Future(SharedPointer<FutureState<T>>& state_ptr);
 
         //---
 
-        FutureState<T>* state_ptr_;
+        SharedPointer<FutureState<T>> state_ptr_;
 
     };
 
     //-------------
     template<typename T>
-    class Promise {
+    class Promise : public PooledNew<TemplateClass> {
+        // need to set PooledNew::element_size explicitly
 
     public:
 
-        // default constructor (no shared state)
+        // default constructor
         Promise();
-
-        // construct an object with the specified shared state.
-        Promise(FutureState<T>* state_ptr);
 
         // destroy a promise object
         ~Promise();
@@ -131,7 +132,7 @@ namespace ldl {
 
         //---
 
-        FutureState<T>* state_ptr_;
+        SharedPointer<FutureState<T>> state_ptr_;
 
         // true if a Future object with the same shared state as this object has been constructed.
         bool future_constructed_;

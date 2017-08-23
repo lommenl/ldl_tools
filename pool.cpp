@@ -239,8 +239,6 @@ namespace ldl {
     //--------------
     int PoolList::GetPoolGrowthStep(std::size_t block_size)
     {
-        //lock while accessing growth_step_
-        c11::lock_guard<c11::mutex> lock(mutex_);
         int retval = default_growth_step_;
         std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
         if (pool_map_.count(rounded_block_size)) { // don't create a pool if it doesn't already exist
@@ -252,7 +250,6 @@ namespace ldl {
     //--------------
     std::size_t PoolList::GetPoolFree(std::size_t block_size)
     {
-        // Pool will ensure its own thread safety.
         std::size_t retval = 0;
         std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
         if (pool_map_.count(rounded_block_size)) { // dont create a pool if it doesn't already exist

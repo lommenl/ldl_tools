@@ -6,11 +6,18 @@
 
 namespace ldl {
 
+    // type with sizeof(0);
+    struct TemplateClass {};
+
     // Base class that will allocate buffers for an object from a Pool of memory.
     // classes that inherit from this class will share a common set of memory pools for allocating objects.
     template<typename T>
     class PooledNew {
     public:
+
+        static void SetElementSize(std::size_t element_size);
+
+        static std::size_t GetElementSize();
 
         // increase size of pool holding single objects by num_blocks.
         static void IncreasePoolSize(std::size_t num_blocks);
@@ -29,7 +36,6 @@ namespace ldl {
 
         // return total number (allocated & unallocated) of blocks in the single pool object
         static std::size_t GetPoolSize();
-
 
         //get a pointer to a block containing n bytes
         // This function is called by new to allocate memory for a single object.
@@ -69,6 +75,8 @@ namespace ldl {
         static void operator delete[](void* ptr);
 
     private:
+
+        static std::size_t element_size_;
 
         static PoolList pool_list_;
 

@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         // -----
         //auto delete
         {
-            ldl::SharedPointer<int> s4(0);
+            ldl::SharedPointer<int> s4(0); // construct w/ nullptr
             BOOST_CHECK_EQUAL(s4.use_count(), 0);
             BOOST_CHECK_EQUAL(s4.unique(), false);
             BOOST_CHECK_EQUAL((bool)s4, false);
@@ -166,7 +166,6 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         // operator>(lhs,rhs);
         // operator<=(lhs,rhs);
         // operator=>(lhs,rhs);
-
 
         std::cout << "done" << std::endl;
 

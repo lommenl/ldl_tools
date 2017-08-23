@@ -16,8 +16,9 @@ namespace ldl {
     /// memory allocations. Instead it uses a linked list to identify the owners of a given pointer.
     /// If a mutex argument is provided in an object constructor, it is used to ensure thread-safe
     /// access to the list of pointer owners.
-    /// The mutex is NOT deleted when the last owner deletes the mangaged object.
-    template<typename T, typename M = c11::mutex>
+    /// The provided mutex is unlocked, but NOT deleted when the last owner deletes the mangaged object.
+    /// The mutex is passed in as an argument to avoid having to allocate one internally.
+    template<typename T>
     class SharedPointer {
     public:
 
@@ -25,7 +26,7 @@ namespace ldl {
         typedef T element_type;
 
         /// Type of mutex.
-        typedef M mutex_type;
+        typedef c11::mutex Mutex;
 
         // type signature of deleter function
         typedef c11::function<void(element_type*)> Deleter;
@@ -33,26 +34,29 @@ namespace ldl {
         //default constructor
         SharedPointer();
 
+        //construct w/ mutex
+        SharedPointer(Mutex& mx);
+
         // Construct from pointer and optional mutex
         template<typename U>
-        SharedPointer(U* ptr, M& mx = *static_cast<M*>(0) );
+        SharedPointer(U* ptr, Mutex& mx = *static_cast<Mutex*>(nullptr) );
 
         // construct from null pointer and optional mutex
-        SharedPointer(nullptr_t, M& mx = *static_cast<M*>(0) );
+        SharedPointer(nullptr_t, Mutex& mx = *static_cast<Mutex*>(nullptr) );
 
         // construct from pointer, deleter, and optional mutex
         template<typename U>
-        SharedPointer(U* ptr, Deleter del, M& mx = *static_cast<M*>(0));
+        SharedPointer(U* ptr, Deleter del, Mutex& mx = *static_cast<Mutex*>(nullptr));
 
         // construct from null pointer, deleter, and optional mutex
-        SharedPointer(nullptr_t, Deleter del, M& mx = *static_cast<M*>(0));
+        SharedPointer(nullptr_t, Deleter del, Mutex& mx = *static_cast<Mutex*>(nullptr));
 
         // copy constructor
         SharedPointer(SharedPointer& other);
 
-        // copy constructor for alternate managed object type
+        // copy constructor from different managed object type
         template<typename U>
-        SharedPointer(SharedPointer<U,M>& other);
+        SharedPointer(SharedPointer<U>& other);
 
         // destructor
         ~SharedPointer();
@@ -60,10 +64,9 @@ namespace ldl {
         // copy assignment operator
         SharedPointer& operator=(SharedPointer& other);
 
-        // copy assignment operator
-        // copy assignment for alternate managed object type
+        // copy assignment from different managed object type
         template<typename U>
-        SharedPointer& operator=(SharedPointer<U,M>& other);
+        SharedPointer& operator=(SharedPointer<U>& other);
 
         // swap state of two objects.
         void swap(SharedPointer& other);
@@ -72,22 +75,26 @@ namespace ldl {
         // releases ownership of any currently owned object.
         void reset();
 
+        // reset state to be as if object were constructed by SharedPointer(mx)
+        // releases ownership of any currently owned object.
+        void reset(Mutex& mx);
+
         // reset object and then swap it with a new object constructed by SharedPointer(ptr,mx)
         template<typename U>
-        void reset(U* ptr, M& mx = *static_cast<M*>(0) );
+        void reset(U* ptr, Mutex& mx = *static_cast<Mutex*>(0) );
 
         // reset object and then swap it with a new object constructed by SharedPointer(ptr,del,mx)
         template<typename U>
-        void reset(U* ptr, Deleter del, M& mx = *static_cast<M*>(0) );
+        void reset(U* ptr, Deleter del, Mutex& mx = *static_cast<Mutex*>(0) );
 
         // return a plain pointer to managed object
-        T* get() const;
+        element_type* get() const;
 
         // dereference managed object
-        T& operator*() const;
+        element_type& operator*() const;
 
         // dereference managed object for calling a member function.
-        T* operator->() const;
+        element_type* operator->() const;
 
         // return number of objects sharing the managed object. (0 if this object is empty)
         long int use_count();
@@ -100,7 +107,8 @@ namespace ldl {
 
     private:
 
-        // function class with operator()(T* ptr) member function that calls del( static_cast<U*>(ptr) )
+        /// Function class with operator()(T* ptr) member function that calls del( static_cast<U*>(ptr) )
+        /// Used to delete an object of type U, that is managed by a SharedPointer<T>.
         template< typename U>
         class CastDeleter {
             typedef c11::function<void(U*)> Deleter;
@@ -118,24 +126,26 @@ namespace ldl {
         // allow ListLock class to access lock() and unlock()
         friend class ListLock;
 
-        // function to make this class lockable, and usable as an argument to the ListLock constructor.
+        // Function to make this class usable as an argument to the ListLock constructor.
+        // This allows the use of a mutex to be optional.
         // if mutex_ptr_ == 0 , it does nothing, otherise it calls mutex_ptr_.lock()
         void lock();
 
-        // function to make this class lockable, and usable as an argument to the ListLock constructor.
+        // Function to make this class usable as an argument to the ListLock constructor.
+        // This allows the use of a mutex to be optional.
         // if mutex_ptr_ == 0 , it does nothing, otherise it calls mutex_ptr_.unlock()
         void unlock();
 
         //------------
 
-        // pointer to mutex
-        M* mutex_ptr_;
+        // pointer to optional mutex (pointer makes it copyable/swapable.)
+        Mutex* mutex_ptr_;
 
         // pointer to previous object in linked list of owners.
-        SharedPointer* prev_sp_;
+        SharedPointer* prev_ptr_;
 
         // pointer to next object in linked list of owners.
-        SharedPointer* next_sp_;
+        SharedPointer* next_ptr_;
 
         // pointer to managed object.
         element_type* obj_ptr_;
@@ -145,61 +155,61 @@ namespace ldl {
 
     };
 
-    // swap state of two objects.
-    template<typename T, typename M>
-    void swap(SharedPointer<T,M>& lhs, SharedPointer<T,M>& rhs);
+    // swap states of two objects.
+    template<typename T>
+    void swap(SharedPointer<T>& lhs, SharedPointer<T>& rhs);
 
     // Equality comparison operators
-    template<typename T, typename M>
-    bool operator==(const SharedPointer<T,M>& lhs, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator==(nullptr_t, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator==(const SharedPointer<T,M>& lhs, nullptr_t);
+    template<typename T>
+    bool operator==(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator==(nullptr_t, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator==(const SharedPointer<T>& lhs, nullptr_t);
 
     // inequality comparison operators
-    template<typename T, typename M>
-    bool operator!=(const SharedPointer<T,M>& lhs, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator!=(nullptr_t, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator!=(const SharedPointer<T,M>& lhs, nullptr_t);
+    template<typename T>
+    bool operator!=(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator!=(nullptr_t, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator!=(const SharedPointer<T>& lhs, nullptr_t);
 
     // less than comparison operators
-    template<typename T, typename M>
-    bool operator<(const SharedPointer<T,M>& lhs, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator<(nullptr_t, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator<(const SharedPointer<T,M>& lhs, nullptr_t);
+    template<typename T>
+    bool operator<(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator<(nullptr_t, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator<(const SharedPointer<T>& lhs, nullptr_t);
 
     // greater than comparison operators
-    template<typename T, typename M>
-    bool operator>(const SharedPointer<T,M>& lhs, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator>(nullptr_t, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator>(const SharedPointer<T,M>& lhs, nullptr_t);
+    template<typename T>
+    bool operator>(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator>(nullptr_t, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator>(const SharedPointer<T>& lhs, nullptr_t);
 
     // greater than or equal to comparison operators.
-    template<typename T, typename M>
-    bool operator>=(const SharedPointer<T,M>& lhs, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator>=(nullptr_t, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator>=(const SharedPointer<T,M>& lhs, nullptr_t);
+    template<typename T>
+    bool operator>=(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator>=(nullptr_t, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator>=(const SharedPointer<T>& lhs, nullptr_t);
 
     // less than or equal to comparison operators.
-    template<typename T, typename M>
-    bool operator<=(const SharedPointer<T,M>& lhs, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator<=(nullptr_t, const SharedPointer<T,M>& rhs);
-    template<typename T, typename M>
-    bool operator<=(const SharedPointer<T,M>& lhs, nullptr_t);
+    template<typename T>
+    bool operator<=(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator<=(nullptr_t, const SharedPointer<T>& rhs);
+    template<typename T>
+    bool operator<=(const SharedPointer<T>& lhs, nullptr_t);
 
     // ostream operator
-    template<typename charT, typename traits, typename T, typename M>
-    std::basic_ostream<charT, traits>& operator<<(std::basic_ostream<charT, traits>& os, const SharedPointer<T, M>& rhs);
+    template<typename charT, typename traits, typename T>
+    std::basic_ostream<charT, traits>& operator<<(std::basic_ostream<charT, traits>& os, const SharedPointer<T>& rhs);
 
 } //namespace ldl
 
