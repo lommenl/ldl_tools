@@ -142,9 +142,9 @@ namespace ldl {
 
     //---------------
     template<typename T>
-    std::size_t LinkedList<T>::size() const
+    size_t LinkedList<T>::size() const
     {
-        std::size_t retval = 0;
+        size_t retval = 0;
         for (const_iterator it = begin(); it != end(); ++it) {
             ++retval;
         }
@@ -155,42 +155,42 @@ namespace ldl {
     template<typename T>
     typename LinkedList<T>::iterator LinkedList<T>::begin()
     {
-        return begin_;
+        return iterator(begin_);
     }
 
     //---------------
     template<typename T>
     typename LinkedList<T>::const_iterator LinkedList<T>::begin() const
     {
-        return begin_;
+        return const_iterator(begin_);
     }
 
     //---------------
     template<typename T>
     typename LinkedList<T>::const_iterator LinkedList<T>::cbegin()
     {
-        return begin_;
+        return const_iterator(begin_);
     }
 
     //---------------
     template<typename T>
     typename LinkedList<T>::iterator LinkedList<T>::end()
     {
-        return 0;
+        return iterator(0);
     }
 
     //---------------
     template<typename T>
     typename LinkedList<T>::const_iterator LinkedList<T>::end() const
     {
-        return 0;
+        return const_iterator(0);
     }
 
     //---------------
     template<typename T>
     typename LinkedList<T>::const_iterator LinkedList<T>::cend()
     {
-        return 0;
+        return const_iterator(0);
     }
 
     //---------------
@@ -210,8 +210,7 @@ namespace ldl {
     template<typename T>
     void LinkedList<T>::push_front(const T& val)
     {
-        T* ptr = new T(val);
-        push_front(ptr);
+        push_front(new T(val));
     }
 
     //---------------

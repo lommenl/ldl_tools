@@ -1,6 +1,7 @@
 #include "boost/test/unit_test.hpp"
 
 #include "shared_pointer.h"
+#include "pooled_mutex.h"
 
 #include <iostream>
 
@@ -12,9 +13,11 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
     std::cout << "Starting shared_ptr_test" << std::endl;
     std::cout << "========================" << std::endl;
 
-    c11::mutex mx;
-
     try {
+
+        // create a pool of 10 PooledMutex objects for use by SharedPointer
+        ldl::PooledMutex::IncreasePoolSize(10);
+
         // default constructor
         ldl::SharedPointer<int> s1;
         BOOST_CHECK_EQUAL(s1.use_count(), 0);
@@ -48,11 +51,10 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         BOOST_CHECK_EQUAL(s1.get(), s2.get());
         BOOST_CHECK_EQUAL(*s2, 11);
 
-
         //----
 
         // reset(ptr)
-        s2.reset(new int(-10), mx);
+        s2.reset(new int(-10));
         BOOST_CHECK_EQUAL(s1.use_count(), 1);
         BOOST_CHECK_EQUAL(s1.unique(), true);
         BOOST_CHECK_EQUAL((bool)s1, true);
@@ -150,13 +152,10 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
 
         // -----
         // TODO:
-        // SharedPointer(ptr,mx)
         // SharedPointer(ptr,del)
-        // SharedPointer(ptr,del,mx)
         // operator=(SharedPointer<U,M>&)
-        // reset(ptr,mx)
+        // reset(ptr)
         // reset(ptr,del)
-        // reset(ptr,del,mx)
         // operator->()
         //----
         // swap(lhs,rhs)

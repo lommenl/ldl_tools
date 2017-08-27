@@ -6,6 +6,7 @@
 #include <iostream>
 
 //-------------------------------------------
+
 struct foo : public ldl::PooledNew<foo> {
     int x;
 };

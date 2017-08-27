@@ -5,6 +5,7 @@
 #include <memory> //std::allocator
 #include <algorithm> // std::max
 
+#include <mutex>
 namespace c11 {
     using namespace std;
 }
@@ -13,14 +14,13 @@ namespace ldl {
 
     //--------------
     Pool::Pool()
-        : mutex_ptr_(nullptr)
-        , block_size_(0)
+        : block_size_(0)
         , tos_(0)
         , growth_step_(0)
     {}
 
     //--------------
-    Pool::Pool(std::size_t block_size, std::size_t num_blocks, int growth_step)
+    Pool::Pool(size_t block_size, size_t num_blocks, int growth_step)
     {
         Initialize(block_size, num_blocks, growth_step);
     }
@@ -28,15 +28,8 @@ namespace ldl {
     //--------------
     Pool::~Pool()
     {
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            for (std::size_t ix = 0; ix < tos_; ++ix) {
-                std::allocator<c11::uint64_t>().deallocate(static_cast<c11::uint64_t*>(stack_[ix]), (block_size_+7)/8);
-            }
-#ifdef _DEBUG
-        std::cout << "Called std::allocator<uint64_t>().deallocate(ptr," << (block_size_ + 7) / 8 << ") ("
-            << block_size_ << " bytes) " << tos_ << " times" << std::endl;
-#endif
+        while (!IsEmpty()) {
+            delete[] Pop();
         }
     }
 
@@ -44,185 +37,155 @@ namespace ldl {
     void Pool::swap(Pool& other)
     {
         if (this != &other) {
-            if (mutex_ptr_) {
-                mutex_ptr_->lock();
-            }
-            if (other.mutex_ptr_) {
-                other.mutex_ptr_->lock();
-            }
-            std::swap(mutex_ptr_, other.mutex_ptr_);
             std::swap(block_size_, other.block_size_);
             std::swap(tos_, other.tos_);
             std::swap(growth_step_, other.growth_step_);
             std::swap(stack_, other.stack_);
-            if (mutex_ptr_) {
-                mutex_ptr_->unlock();
-            }
-            if (other.mutex_ptr_) {
-                other.mutex_ptr_->unlock();
-            }
         }
     }
 
     //--------------
-    void Pool::Initialize(std::size_t block_size, std::size_t num_blocks, int growth_step)
+    void Pool::Initialize(size_t block_size, size_t num_blocks, int growth_step)
     {
-        if (block_size == 0 ) {
+        if (block_size == 0) {
             throw std::runtime_error("invalid block_size argument");
         }
-        mutex_ptr_.reset(new c11::mutex());
         block_size_ = block_size;
         tos_ = 0;
         growth_step_ = growth_step;
     }
 
     //-----------------
-    void Pool::IncreaseSize(std::size_t num_blocks)
+    void Pool::IncreaseSize(size_t num_blocks)
     {
-        if (mutex_ptr_) { //object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            NoLockIncreaseSize( stack_.size() + num_blocks);
+        stack_.resize(stack_.size() + num_blocks);
+        for (size_t ix = 0; ix < num_blocks; ++ix) {
+            // for each new element allocate raw memory from the heap and push it onto the stack
+            // allocate uint64_t to get 64-bit alignment for all blocks (round up)
+            Push(new uint64_t[(block_size_ + 7) >> 3]);
         }
+#ifdef _DEBUG
+        std::cout << "Called new uint64_t[" << ((block_size_ + 7) >> 3) << "] ("
+            << block_size_ << " bytes) " << num_blocks << " times" << std::endl;
+#endif
     }
 
     //-----------------
     void Pool::SetGrowthStep(int growth_step)
     {
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            growth_step_ = growth_step;
-        }
+        growth_step_ = growth_step;
     }
 
     //-----------------
-    int Pool::GetGrowthStep()
+    int Pool::GetGrowthStep() const
     {
-        int retval = 0;
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            retval = growth_step_;
-        }
-        return retval;
+        return growth_step_;
     }
 
     //-----------------
-    std::size_t Pool::GetBlockSize() const
+    size_t Pool::GetBlockSize() const
     {
         return block_size_;
     }
 
     //-----------------
-    std::size_t Pool::GetFree()
+    size_t Pool::GetFree() const
     {
-        std::size_t retval = 0;
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            retval = tos_;
-        }
-        return retval;
+        return tos_;
     }
 
     //-----------------
-    std::size_t Pool::GetSize()
+    size_t Pool::GetSize() const
     {
-        std::size_t retval = 0;
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            retval = stack_.size();
-        }
-        return retval;
+        return stack_.size();
+    }
+
+    //-----------------
+    bool Pool::IsEmpty() const
+    {
+        return (tos_ == 0);
     }
 
     //-----------------
     void* Pool::Pop()
     {
-        void* retval = 0;
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            if (tos_ == 0) { //if stack is empty
-                if (growth_step_ > 0) { // growth_step is an increment
-                    //  add growth_step_ elements to stack_
-                    NoLockIncreaseSize(static_cast<std::size_t>(growth_step_));
-                }
-                else if (growth_step_ < 0) { // growth step is negative inverse of a scale factor. (e.g. -3 = a scale factor of 1/3
-                    NoLockIncreaseSize(std::max<std::size_t>(1, stack_.size()/static_cast<std::size_t>(-growth_step_)));
-                }
-                else { // growth_step == 0 // no growth allowed
-                    throw std::bad_alloc();
-                }
-            }
-            retval = stack_[--tos_]; // get ptr from front of stack
 #ifdef _DEBUG
-            std::cout << "-->Popped a(n) " << block_size_ << " byte block" << std::endl;
+        std::cout << "-->Popping a(n) " << block_size_ << " byte block" << std::endl;
 #endif //_DEBUG
+        void* retval = 0;
+        if (IsEmpty()) { //if stack is empty
+            if (growth_step_ > 0) { // growth_step is an increment
+                //  add growth_step_ elements to stack_
+                IncreaseSize(static_cast<size_t>(growth_step_));
+            }
+            else if (growth_step_ < 0) { // growth step is negative inverse of a scale factor. (e.g. -3 = a scale factor of 1/3
+                IncreaseSize(std::max<size_t>(1, stack_.size() / static_cast<size_t>(-growth_step_)));
+            }
+            else { // growth_step == 0 // no growth allowed
+                throw std::bad_alloc();
+            }
         }
+        retval = stack_[--tos_]; // get ptr from front of stack
         return retval;
     }
 
     //-----------------
     void Pool::Push(void* ptr)
     {
-        if (mutex_ptr_) { // object is valid
-            c11::lock_guard<c11::mutex> lock(*mutex_ptr_);
-            if (tos_ >= stack_.size() && growth_step_ == 0) {
-                throw std::bad_alloc();
-            }
-            if (ptr) {
-                stack_[tos_++] = ptr;
 #ifdef _DEBUG
-                std::cout << "<--Pushed a(n) " << block_size_ << " byte block" << std::endl;
+            std::cout << "<--Pushing a(n) " << block_size_ << " byte block" << std::endl;
 #endif //_DEBUG
-            }
+        if (tos_ >= stack_.size() && growth_step_ == 0) {
+            throw std::bad_alloc();
         }
-    }
-
-    //-----------------
-    void Pool::NoLockIncreaseSize(std::size_t num_blocks)
-    {
-        stack_.resize(stack_.size() + num_blocks );
-        for (std::size_t ix = 0; ix < num_blocks; ++ix) {
-            // for each new element allocate raw memory from the heap and push it onto the stack
-            // allocate uint64_t to get 64-bit alignment for all blocks (round up)
-            stack_[tos_++] = static_cast<void*>(std::allocator<c11::uint64_t*>().allocate((block_size_+7)/8));
+        if (ptr) {
+            stack_[tos_++] = ptr;
         }
-#ifdef _DEBUG
-        std::cout << "Called std::allocator<uint64_t>().allocate(" << (block_size_ + 7) / 8 << ") ("
-            << block_size_ << " bytes) " << num_blocks << " times" << std::endl;
-#endif
     }
 
     //================================
 
     //--------------
-    Pool& PoolList::GetPool(std::size_t block_size)
+    bool PoolList::HasPool(size_t block_size) const
     {
-        if (block_size == 0 || block_size > MAX_BLOCK_SIZE ) {
+        return (pool_map_.count(block_size) != 0);
+    }
+    //--------------
+    Pool& PoolList::GetPool(size_t block_size)
+    {
+        if (block_size == 0 || block_size > MAX_BLOCK_SIZE_) {
             throw std::runtime_error("Invalid block_size argument");
         }
         // round block_size up to nearest multple of 8. (multiple block sizes will map to one pool)
-        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
-        //lock while accessing pool_map_
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        if (pool_map_.count(rounded_block_size) == 0) { // pool doesn't exist
+        block_size = (block_size + 7) >> 3;
+        if (!HasPool(block_size)) { // pool doesn't exist
             // construct a new Pool object
-            pool_map_[rounded_block_size].Initialize(rounded_block_size, 0, default_growth_step_); // empty pool
+            pool_map_[block_size].Initialize(block_size, 0, default_growth_step_); // empty pool
         }
-        return pool_map_.at(rounded_block_size);
+        return pool_map_.at(block_size);
     }
 
     //--------------
-    void PoolList::IncreasePoolSize(std::size_t block_size, std::size_t num_blocks)
+    Pool const& PoolList::GetPool(size_t block_size) const
     {
-        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
-        GetPool(rounded_block_size).IncreaseSize(num_blocks); // GetPool() may create the pool
+        if (block_size == 0 || block_size > MAX_BLOCK_SIZE_ || !HasPool(block_size)) {
+            throw std::runtime_error("Invalid block_size argument");
+        }
+        // round block_size up to nearest multple of 8. (multiple block sizes will map to one pool)
+        block_size = (block_size + 7) >> 3;
+        return pool_map_.at(block_size);
     }
 
     //--------------
-    void PoolList::SetPoolGrowthStep(std::size_t block_size, int growth_step)
+    void PoolList::IncreasePoolSize(size_t block_size, size_t num_blocks)
+    {
+        GetPool(block_size).IncreaseSize(num_blocks); // GetPool() may create the pool
+    }
+
+    //--------------
+    void PoolList::SetPoolGrowthStep(size_t block_size, int growth_step)
     {
         if (block_size == 0) { // set default, and all pools
-            //lock while accessing default_growth_step_ and pool_map_
-            c11::lock_guard<c11::mutex> lock(mutex_);
             // set default growth_step for new pools.
             default_growth_step_ = growth_step;
             // set size of all existing pools to growth_step
@@ -231,57 +194,149 @@ namespace ldl {
             }
         }
         else { //set only pool_list[block_size]
-            std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
-            GetPool(rounded_block_size).SetGrowthStep(growth_step); // GetPool() may create the pool
+            GetPool(block_size).SetGrowthStep(growth_step); // GetPool() may create the pool
         }
     }
 
     //--------------
-    int PoolList::GetPoolGrowthStep(std::size_t block_size)
+    int PoolList::GetPoolGrowthStep(size_t block_size) const
     {
         int retval = default_growth_step_;
-        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
-        if (pool_map_.count(rounded_block_size)) { // don't create a pool if it doesn't already exist
-            retval = GetPool(rounded_block_size).GetGrowthStep();
+        if (HasPool(block_size)) {
+            retval = GetPool(block_size).GetGrowthStep();
         }
         return retval;
     }
 
     //--------------
-    std::size_t PoolList::GetPoolFree(std::size_t block_size)
+    size_t PoolList::GetPoolFree(size_t block_size) const
     {
-        std::size_t retval = 0;
-        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
-        if (pool_map_.count(rounded_block_size)) { // dont create a pool if it doesn't already exist
-            retval = GetPool(rounded_block_size).GetFree();
+        size_t retval = 0;
+        if (HasPool(block_size)) {
+            retval = GetPool(block_size).GetFree();
         }
         return retval;
     }
 
     //--------------
-    std::size_t PoolList::GetPoolSize(std::size_t block_size)
+    size_t PoolList::GetPoolSize(size_t block_size) const
     {
-        std::size_t retval = 0;
-        std::size_t rounded_block_size = (block_size + 7) & (~0x7UL);
-        if (pool_map_.count(rounded_block_size)) { // dont create a pool if it doesn't already exist
-            retval = GetPool(rounded_block_size).GetSize();
+        size_t retval = 0;
+        if (HasPool(block_size)) {
+            retval = GetPool(block_size).GetSize();
         }
         return retval;
     }
 
     //--------------
-    void* PoolList::Pop(std::size_t block_size)
+    bool PoolList::PoolIsEmpty(size_t block_size) const
+    {
+        bool retval = true;
+        if (HasPool(block_size)) {
+            retval = GetPool(block_size).IsEmpty();
+        }
+        return retval;
+    }
+
+    //--------------
+    size_t PoolList::GetMaxPoolBlockSize() const
+    {
+        return MAX_BLOCK_SIZE_;
+    }
+
+    //--------------
+    void* PoolList::Pop(size_t block_size)
     {
         return GetPool(block_size).Pop(); // GetPool() may create the pool
     }
 
     //--------------
-    void PoolList::Push(std::size_t block_size, void* ptr)
+    void PoolList::Push(size_t block_size, void* ptr)
     {
         GetPool(block_size).Push(ptr); // GetPool() may create the pool
     }
 
     //==================================================
+
+    //--------------
+    bool StaticPoolList::HasPool(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.HasPool(block_size);
+    }
+
+    //--------------
+    Pool& StaticPoolList::GetPool(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.GetPool(block_size);
+    }
+
+    //--------------
+    void StaticPoolList::IncreasePoolSize(size_t block_size, size_t num_blocks)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        pool_list_.IncreasePoolSize(block_size,num_blocks);
+    }
+
+    //--------------
+    void StaticPoolList::SetPoolGrowthStep(size_t block_size, int growth_step)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        pool_list_.SetPoolGrowthStep(block_size,growth_step);
+    }
+
+    //--------------
+    int StaticPoolList::GetPoolGrowthStep(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.GetPoolGrowthStep(block_size);
+    }
+
+    //--------------
+    size_t StaticPoolList::GetPoolFree(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.GetPoolFree(block_size);
+    }
+
+    //--------------
+    size_t StaticPoolList::GetPoolSize(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.GetPoolSize(block_size);
+    }
+
+    //--------------
+    bool StaticPoolList::PoolIsEmpty(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.PoolIsEmpty(block_size);
+    }
+
+    //--------------
+    size_t StaticPoolList::GetMaxPoolBlockSize()
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.GetMaxPoolBlockSize();
+    }
+
+    //--------------
+    void* StaticPoolList::Pop(size_t block_size)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        return pool_list_.Pop(block_size);
+    }
+
+    //--------------
+    void StaticPoolList::Push(size_t block_size, void* ptr)
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        pool_list_.Push(block_size,ptr);
+    }
+
+    //--------------
+    c11::mutex StaticPoolList::mutex_;
 
     //--------------
     PoolList StaticPoolList::pool_list_;

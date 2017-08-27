@@ -6,17 +6,12 @@
 
 namespace ldl {
 
-
     //---------------
     template<typename T>
     FutureState<T>::FutureState()
         : notified(false)
         , value_set(false)
     {
-        // if necessary, set PooledNew element size
-        if (GetElementSize() == 0) {
-            SetElementSize(sizeof(FutureState<T>));
-        }
     }
 
     //---------------
@@ -24,6 +19,20 @@ namespace ldl {
     Future<T>::Future()
         : state_ptr_(nullptr)
     {}
+
+    //---------------
+    template<typename T>
+    Future<T>::Future(Future& other)
+    {
+        swap(other);
+    }
+
+    //---------------
+    template<typename T>
+    Future<T>& Future<T>::operator=(Future& other)
+    {
+        swap(other);
+    }
 
     //---------------
     template<typename T>
@@ -50,7 +59,7 @@ namespace ldl {
     T Future<T>::get()
     {
         if (!valid()) {
-            throw std::runtime_error("Future is not valid"); 
+            throw std::runtime_error("Future is not valid");
         }
         wait();
         return state_ptr_->value;
@@ -91,7 +100,7 @@ namespace ldl {
     //---------------
     template<typename T>
     template< typename Rep, typename Period>
-    FutureStatus::type Future<T>::wait_for(const c11::chrono::duration<Rep, Period>& rel_time) 
+    FutureStatus::type Future<T>::wait_for(const c11::chrono::duration<Rep, Period>& rel_time)
     {
         return wait_until(c11::chrono::steady_clock::now() + rel_time);
     }
@@ -99,12 +108,9 @@ namespace ldl {
     //---------------
     template<typename T>
     Promise<T>::Promise()
-        : state_ptr_(new FutureState<T>()) // Q: Does shared_ptr need a mutex?
+        : state_ptr_(new FutureState<T>())
         , future_constructed_(false)
     {
-        if (GetElementSize() == 0) {
-            SetElementSize(sizeof(Promise<T>));
-        }
     }
 
     //---------------

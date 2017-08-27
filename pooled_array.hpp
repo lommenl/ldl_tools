@@ -1,6 +1,8 @@
 #include "pooled_array.h"
 
-#include <algorithm>
+#include <algorithm> // std::copy
+
+#include "Pool.h" //StaticPoolList
 
 namespace ldl {
 
@@ -8,7 +10,7 @@ namespace ldl {
     template<typename T>
     PooledArray<T>::PooledArray()
         : numel_(0)
-        , data_(0)
+        , buffer_(0)
     {
     }
 
@@ -16,25 +18,26 @@ namespace ldl {
     template<typename T>
     PooledArray<T>::PooledArray(const PooledArray& other)
         : numel_(0)
-        , data_(0)
+        , buffer_(0)
     {
         operator=(other);
+        PooledNew::IncreasePoolSize(1);
     }
 
     //-------------------
     template<typename T>
-    PooledArray<T>::PooledArray(std::size_t numel)
+    PooledArray<T>::PooledArray(size_t numel)
         : numel_(0)
-        , data_(0)
+        , buffer_(0)
     {
-        SetSize(numel);
+        Initialize(numel);
     }
 
     //-------------------
     template<typename T>
     PooledArray<T>::~PooledArray()
     {
-        DestroyData();
+        DeleteBuffer();
     }
 
     //-------------------
@@ -42,8 +45,8 @@ namespace ldl {
     PooledArray<T>& PooledArray<T>::operator=(const PooledArray& other)
     {
         if (this != &other) {
-            DestroyData();
-            ConstructData(other.numel_);
+            DeleteBuffer();
+            NewBuffer(other.numel_);
             std::copy(begin(), end(), other.begin()); // copy elements
         }
         return *this;
@@ -51,10 +54,12 @@ namespace ldl {
 
     //-------------------
     template<typename T>
-    void PooledArray<T>::SetSize(std::size_t numel)
+    void PooledArray<T>::Initialize(size_t numel)
     {
-        if (numel_ != 0 || data_ != 0) { throw std::runtime_error("PooledArray already initialized"); }
-        ConstructData(numel);
+        if (numel_ != 0 || buffer_ != 0) {
+            throw std::runtime_error("PooledArray already initialized");
+        }
+        NewBuffer(numel);
     }
 
     //-------------------
@@ -63,7 +68,8 @@ namespace ldl {
     {
         if (this != &other) {
             std::swap(numel_, other.numel_);
-            std::swap(data_, other.data_);
+            std::swap(buffer_, other.buffer_);
+            std::swap(buffer_element_size_, other.buffer_element_size_);
         }
     }
 
@@ -71,54 +77,54 @@ namespace ldl {
     template<typename T>
     typename PooledArray<T>::iterator PooledArray<T>::begin()
     {
-        return data_;
+        return buffer_;
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::const_iterator PooledArray<T>::begin() const
     {
-        return data_;
+        return buffer_;
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::const_iterator PooledArray<T>::cbegin() const
     {
-        return data_;
+        return buffer_;
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::iterator PooledArray<T>::end()
     {
-        return data_ + numel_;
+        return buffer_ + numel_;
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::const_iterator PooledArray<T>::end() const
     {
-        return data_ + numel_;
+        return buffer_ + numel_;
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::const_iterator PooledArray<T>::cend() const
     {
-        return data_ + numel_;
+        return buffer_ + numel_;
     }
 
     //-------------------
     template<typename T>
-    std::size_t PooledArray<T>::size() const
+    size_t PooledArray<T>::size() const
     {
         return numel_;
     }
 
     //-------------------
     template<typename T>
-    std::size_t PooledArray<T>::max_size() const
+    size_t PooledArray<T>::max_size() const
     {
         return numel_;
     }
@@ -139,140 +145,152 @@ namespace ldl {
 
     //-------------------
     template<typename T>
-    typename PooledArray<T>::value_type& PooledArray<T>::operator[](std::size_t n)
+    typename PooledArray<T>::value_type& PooledArray<T>::operator[](size_t n)
     {
-        return data_[n];
+        return buffer_[n];
     }
 
     //-------------------
     template<typename T>
-    typename PooledArray<T>::value_type const& PooledArray<T>::operator[](std::size_t n) const
+    typename PooledArray<T>::value_type const& PooledArray<T>::operator[](size_t n) const
     {
-        return data_[n];
+        return buffer_[n];
     }
 
     //-------------------
     template<typename T>
-    typename PooledArray<T>::value_type& PooledArray<T>::at(std::size_t n)
+    typename PooledArray<T>::value_type& PooledArray<T>::at(size_t n)
     {
-        return data_[n];
+        return buffer_[n];
     }
 
     //-------------------
     template<typename T>
-    typename PooledArray<T>::value_type const& PooledArray<T>::at(std::size_t n) const
+    typename PooledArray<T>::value_type const& PooledArray<T>::at(size_t n) const
     {
-        return data_[n];
+        return buffer_[n];
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::value_type& PooledArray<T>::front()
     {
-        return data_[0];
+        return buffer_[0];
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::value_type const& PooledArray<T>::front() const
     {
-        return data_[0];
+        return buffer_[0];
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::value_type& PooledArray<T>::back()
     {
-        return data_[numel_ - 1];
+        return buffer_[numel_ - 1];
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::value_type const& PooledArray<T>::back() const
     {
-        return data_[numel_ - 1];
+        return buffer_[numel_ - 1];
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::value_type* PooledArray<T>::data()
     {
-        return data_;
+        return buffer_;
     }
 
     //-------------------
     template<typename T>
     typename PooledArray<T>::value_type const* PooledArray<T>::data() const
     {
-        return data_;
+        return buffer_;
     }
 
     //-------------------
     template<typename T>
-    void PooledArray<T>::ConstructData(std::size_t numel)
+    void PooledArray<T>::NewBuffer(size_t numel)
     {
-        if (data_!=0 || numel_!=0 || numel == 0) { throw std::bad_alloc(); }
+        if (buffer_ == 0 || buffer_element_size_ == 0 || numel == 0) {
+            throw std::bad_alloc();
+        }
         numel_ = numel;
         // get memory from pool
-        data_ = static_cast<value_type*>(pool_list_.Pop(numel_ * sizeof(value_type)));
-        // call default constructor on each element.
-        data_ = new(static_cast<void*>(data_)) value_type[numel_];
+        size_t block_size = numel_ * buffer_element_size_;
+        buffer_ = static_cast<value_type*>(StaticPoolList::Pop(block_size));
+        buffer_ = new(static_cast<void*>(buffer_)) value_type[numel_];
     }
 
     //-------------------
     template<typename T>
-    void PooledArray<T>::DestroyData()
+    void PooledArray<T>::DeleteBuffer()
     {
-        if (data_ && numel_) {
+        if (buffer_ && numel_) {
             // call destructor on each element
             for (iterator it = begin(); it != end(); ++it) {
                 it->~value_type();
             }
             // return memory to pool
-            pool_list_.Push(numel_ * sizeof(value_type), static_cast<void*>(data_));
+            size_t block_size = numel_ * buffer_element_size_;
+            StaticPoolList::Push(block_size, static_cast<void*>(buffer_));
         }
         numel_ = 0;
-        data_ = 0;
+        buffer_ = 0;
     }
 
     //-------------------
     template<typename T>
-    void PooledArray<T>::IncreasePoolSize(std::size_t numel, std::size_t num_blocks)
+    void PooledArray<T>::IncreaseBufferPoolSize(size_t numel, size_t num_blocks)
     {
-        pool_list_.IncreasePoolSize(numel * sizeof(value_type), num_blocks);
+        size_t block_size = numel * buffer_element_size_;
+        StaticPoolList::IncreasePoolSize(block_size, num_blocks);
     }
 
     //-------------------
     template<typename T>
-    void PooledArray<T>::SetPoolGrowthStep(std::size_t numel, int growth_step)
+    void PooledArray<T>::SetBufferPoolGrowthStep(size_t numel, int growth_step)
     {
-        pool_list_.SetPoolGrowthStep(numel * sizeof(value_type), growth_step);
+        size_t block_size = numel * buffer_element_size_;
+        StaticPoolList::SetPoolGrowthStep(block_size, growth_step);
     }
 
     //-------------------
     template<typename T>
-    int PooledArray<T>::GetPoolGrowthStep(std::size_t numel)
+    int PooledArray<T>::GetBufferPoolGrowthStep(size_t numel)
     {
-        return pool_list_.GetPoolGrowthStep(numel * sizeof(value_type));
+        size_t block_size = numel * buffer_element_size_;
+        return StaticPoolList::GetPoolGrowthStep(block_size);
     }
 
     //-------------------
     template<typename T>
-    std::size_t PooledArray<T>::GetPoolFree(std::size_t numel)
+    size_t PooledArray<T>::GetBufferPoolFree(size_t numel)
     {
-        return pool_list_.GetPoolFree(numel * sizeof(value_type));
+        size_t block_size = numel * buffer_element_size_;
+        return StaticPoolList::GetPoolFree(block_size);
     }
 
     //-------------------
     template<typename T>
-    std::size_t PooledArray<T>::GetPoolSize(std::size_t numel)
+    size_t PooledArray<T>::GetBufferPoolSize(size_t numel)
     {
-        return pool_list_.GetPoolSize(numel * sizeof(value_type));
+        size_t block_size = numel * buffer_element_size_;
+        return StaticPoolList::GetPoolSize(block_size);
     }
 
     //-------------------
     template<typename T>
-    PoolList PooledArray<T>::pool_list_;
+    bool PooledArray<T>::BufferPoolIsEmpty(size_t numel)
+    {
+        size_t block_size = numel * buffer_element_size_;
+        return StaticPoolList::PoolIsEmpty(block_size);
+    }
 
     //-------------------
     template<typename T>

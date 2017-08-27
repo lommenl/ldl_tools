@@ -80,5 +80,8 @@
     <ClInclude Include="pooled_new.hpp">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="pooled_mutex.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -14,8 +14,19 @@ namespace ldl {
 
     //-----------------
     template<typename T>
-    SharedPointer<T>::SharedPointer(Mutex& mx)
-        : mutex_ptr_(&mx)
+    template<typename U>
+    SharedPointer<T>::SharedPointer(U* ptr)
+        : mutex_ptr_(new PooledMutex)
+        , prev_ptr_(0)
+        , next_ptr_(0)
+        , obj_ptr_(static_cast<T*>(ptr))
+    {
+    }
+
+    //-----------------
+    template<typename T>
+    SharedPointer<T>::SharedPointer(nullptr_t)
+        : mutex_ptr_(0)
         , prev_ptr_(0)
         , next_ptr_(0)
         , obj_ptr_(0)
@@ -25,44 +36,22 @@ namespace ldl {
     //-----------------
     template<typename T>
     template<typename U>
-    SharedPointer<T>::SharedPointer(U* ptr, Mutex& mx)
-        : mutex_ptr_(&mx)
+    SharedPointer<T>::SharedPointer(U* ptr, Deleter deleter)
+        : mutex_ptr_(new PooledMutex)
         , prev_ptr_(0)
         , next_ptr_(0)
         , obj_ptr_(static_cast<T*>(ptr))
+        , deleter_(deleter)
     {
     }
 
     //-----------------
     template<typename T>
-    SharedPointer<T>::SharedPointer(nullptr_t, Mutex& mx)
-        : mutex_ptr_(&mx)
+    SharedPointer<T>::SharedPointer(nullptr_t, Deleter deleter)
+        : mutex_ptr_(0)
         , prev_ptr_(0)
         , next_ptr_(0)
         , obj_ptr_(0)
-    {
-    }
-
-    //-----------------
-    template<typename T>
-    template<typename U>
-    SharedPointer<T>::SharedPointer(U* ptr, Deleter del, Mutex& mx)
-        : mutex_ptr_(&mx)
-        , prev_ptr_(0)
-        , next_ptr_(0)
-        , obj_ptr_(static_cast<T*>(ptr))
-        , deleter_(del)
-    {
-    }
-
-    //-----------------
-    template<typename T>
-    SharedPointer<T>::SharedPointer(nullptr_t, Deleter del, Mutex& mx)
-        : mutex_ptr_(&mx)
-        , prev_ptr_(0)
-        , next_ptr_(0)
-        , obj_ptr_(0)
-        , deleter_(del)
     {
     }
 
@@ -100,18 +89,20 @@ namespace ldl {
     template<typename T>
     SharedPointer<T>&  SharedPointer<T>::operator=(SharedPointer<T>& other)
     {
-        // if not same object, or same managed object
+        // if not the same object, or managing the same object
         if (this != &other && obj_ptr_ != other.obj_ptr_) {
             // remove *this from its current list.
             reset();
-            // insert *this into others list
-            ListLock lock(other); // lock other list
-            mutex_ptr_ = other.mutex_ptr_;
-            prev_ptr_ = &other;
-            next_ptr_ = other.next_ptr_;
-            other.next_ptr_ = this;
-            obj_ptr_ = static_cast<T*>(other.obj_ptr_);
-            deleter_ = other.deleter_;
+            if (other.mutex_ptr_) {
+                // insert *this after other
+                ListLock lock(*other.mutex_ptr_);
+                obj_ptr_ = static_cast<T*>(other.obj_ptr_);
+                deleter_ = other.deleter_;
+                mutex_ptr_ = other.mutex_ptr_;
+                prev_ptr_ = &other;
+                next_ptr_ = other.next_ptr_;
+                other.next_ptr_ = this;
+            }
         }
         return *this;
     }
@@ -121,20 +112,21 @@ namespace ldl {
     template<typename U>
     SharedPointer<T>& SharedPointer<T>::operator=(SharedPointer<U>& other)
     {
-        // if not same object, or same managed object
+        // if not the same object, or managing the same object
         if (this != &other && obj_ptr_ != other.obj_ptr_) {
             // remove *this from its current list
             reset();
-            // insert *this into others list
-            ListLock lock(other); // lock other list
-            mutex_ptr_ = other.mutex_ptr_;
-            prev_ptr_ = &other;
-            next_ptr_ = other.next_ptr_;
-            other.next_ptr_ = this;
-            obj_ptr_ = static_cast<T*>(other.obj_ptr_);
-            if (other.deleter_) {  // if a deleter was specified for other.
-                // set deleter_(ptr) to call other.deleter_(static_cast<U*>(ptr));
-                deleter_ = CastDeleter<U>(other.deleter_);
+            if (other.mutex_ptr_) {
+                // insert *this after other
+                ListLock lock(*other.mutex_ptr_);
+                mutex_ptr_ = other.mutex_ptr_;
+                obj_ptr_ = static_cast<T*>(other.obj_ptr_);
+                if (other.deleter_) {  // if a deleter was specified for other.
+                    deleter_ = CastDeleter<U>(other.deleter_);
+                }
+                prev_ptr_ = &other;
+                next_ptr_ = other.next_ptr_;
+                other.next_ptr_ = this;
             }
         }
         return *this;
@@ -144,16 +136,34 @@ namespace ldl {
     template<typename T>
     void SharedPointer<T>::swap(SharedPointer& other)
     {
-        // if not same object, or same managed object
+        // if not the same object, or managing the same object
         if (this != &other && obj_ptr_ != other.obj_ptr_) {
             // lock both this objects list and others list
-            ListLock lock(*this);
-            ListLock lock2(other);
-            std::swap(mutex_ptr_, other.mutex_ptr_);
-            std::swap(prev_ptr_, other.prev_ptr_);
-            std::swap(next_ptr_, other.next_ptr_);
-            std::swap(obj_ptr_, other.obj_ptr_);
-            std::swap(deleter_, other.deleter_);
+            if (mutex_ptr_ && !other.mutex_ptr_) {
+                ListLock lock(*mutex_ptr_);
+                std::swap(mutex_ptr_, other.mutex_ptr_);
+                std::swap(prev_ptr_, other.prev_ptr_);
+                std::swap(next_ptr_, other.next_ptr_);
+                std::swap(obj_ptr_, other.obj_ptr_);
+                std::swap(deleter_, other.deleter_);
+            }
+            else if (!mutex_ptr_ && other.mutex_ptr_) {
+                ListLock lock(*other.mutex_ptr_);
+                std::swap(mutex_ptr_, other.mutex_ptr_);
+                std::swap(prev_ptr_, other.prev_ptr_);
+                std::swap(next_ptr_, other.next_ptr_);
+                std::swap(obj_ptr_, other.obj_ptr_);
+                std::swap(deleter_, other.deleter_);
+            }
+            else if (mutex_ptr_ && other.mutex_ptr_) {
+                ListLock lock(*mutex_ptr_);
+                ListLock lock2(*other.mutex_ptr_);
+                std::swap(mutex_ptr_, other.mutex_ptr_);
+                std::swap(prev_ptr_, other.prev_ptr_);
+                std::swap(next_ptr_, other.next_ptr_);
+                std::swap(obj_ptr_, other.obj_ptr_);
+                std::swap(deleter_, other.deleter_);
+            }
         }
     }
 
@@ -161,9 +171,9 @@ namespace ldl {
     template<typename T>
     void SharedPointer<T>::reset()
     {
-        { // mutex block
-            ListLock lock(*this);
-            // if this is the only item in the list, delete obj_ptr_
+        if ( mutex_ptr_ ) {
+            ListLock lock(*mutex_ptr_);
+            // if this is the only object in the list, delete obj_ptr_
             if (obj_ptr_ != 0 && prev_ptr_ == 0 && next_ptr_ == 0) {
                 if (deleter_) {
                     deleter_(obj_ptr_);
@@ -185,34 +195,29 @@ namespace ldl {
             next_ptr_ = 0;
             obj_ptr_ = 0;
             deleter_ = Deleter();
-        } // unlock mutex before resetting mutex_ptr_
-        mutex_ptr_ = 0;
-    }
-
-    //-----------------
-    template<typename T>
-    void SharedPointer<T>::reset(Mutex& mx)
-    {
-        reset();
-        swap(SharedPointer(mx));
+        } // unlock mutex before deleting mutex_ptr_
+        if (mutex_ptr_) {
+            delete mutex_ptr_;
+            mutex_ptr_ = 0;
+        }
     }
 
     //-----------------
     template<typename T>
     template<typename U>
-    void SharedPointer<T>::reset(U* ptr, Mutex& mx)
+    void SharedPointer<T>::reset(U* ptr)
     {
         reset();
-        swap(SharedPointer(ptr, mx));
+        swap(SharedPointer(ptr));
     }
 
     //-----------------
     template<typename T>
     template<typename U>
-    void SharedPointer<T>::reset(U* ptr, Deleter del, Mutex& mx)
+    void SharedPointer<T>::reset(U* ptr, Deleter del)
     {
         reset();
-        swap(SharedPointer(ptr, del, mx));
+        swap(SharedPointer(ptr, del));
     }
 
     //-----------------
@@ -241,8 +246,8 @@ namespace ldl {
     long int SharedPointer<T>::use_count()
     {
         long int retval = 0;
-        if (obj_ptr_ != 0) {
-            ListLock lock(*this);
+        if (mutex_ptr_) {
+            ListLock lock(*mutex_ptr_);
             for (SharedPointer* ptr = this; ptr != 0; ptr = ptr->prev_ptr_) {
                 ++retval;
             }
@@ -257,8 +262,12 @@ namespace ldl {
     template<typename T>
     bool SharedPointer<T>::unique()
     {
-        ListLock lock(*this);
-        return (obj_ptr_ != 0 && prev_ptr_ == 0 && next_ptr_ == 0);
+        bool retval = false;
+        if (mutex_ptr_) {
+            ListLock lock(*mutex_ptr_);
+            retval = (prev_ptr_ == 0 && next_ptr_ == 0);
+        } 
+        return retval;
     }
 
     //-----------------
@@ -269,73 +278,68 @@ namespace ldl {
     }
 
     //-----------------
-    template<typename T>
-    void SharedPointer<T>::lock() {
-        if (mutex_ptr_) {
-            mutex_ptr_->lock();
-        }
-    }
-
-    //-----------------
-    template<typename T>
-    void SharedPointer<T>::unlock() {
-        if (mutex_ptr_) {
-            mutex_ptr_->unlock();
-        }
-    }
-
-    //-----------------
-    template<typename T>
-    void swap(SharedPointer<T>& lhs, SharedPointer<T>& rhs)
-    {
-        lhs.swap(rhs);
-    }
-
-    //-----------------
+    // lhs==rhs
     template<typename T>
     bool operator==(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs) { return (lhs.get() == rhs.get()); }
+    // lhs==0
     template<typename T>
     bool operator==(nullptr_t, const SharedPointer<T>& rhs) { return (lhs.get() == nullptr); }
+    // 0==rhs
     template<typename T>
     bool operator==(const SharedPointer<T>& lhs, nullptr_t) { return (lhs.get() == nullptr); }
 
     //-----------------
+    // 0!=rhs
     template<typename T>
     bool operator!=(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs) { return (lhs.get() != rhs.get()); }
+    // lhs!=0
     template<typename T>
     bool operator!=(nullptr_t, const SharedPointer<T>& rhs) { return (lhs.get() != nullptr); }
+    // 0!=rhs
     template<typename T>
     bool operator!=(const SharedPointer<T>& lhs, nullptr_t) { return (lhs.get() != nullptr); }
 
     //-----------------
+    // lhs<rhs
     template<typename T>
     bool operator<(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs) { return (lhs.get() < rhs.get()); }
+    // lhs<0
     template<typename T>
     bool operator<(nullptr_t, const SharedPointer<T>& rhs) { return (lhs.get() < nullptr); }
+    // 0<rhs
     template<typename T>
     bool operator<(const SharedPointer<T>& lhs, nullptr_t) { return (lhs.get() < nullptr); }
 
     //-----------------
+    // lhs>rhs
     template<typename T>
     bool operator>(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs) { return (lhs.get() > rhs.get()); }
+    // lhs>0
     template<typename T>
     bool operator>(nullptr_t, const SharedPointer<T>& rhs) { return (lhs.get() > nullptr); }
+    // 0>rhs
     template<typename T>
     bool operator>(const SharedPointer<T>& lhs, nullptr_t) { return (lhs.get() > nullptr); }
 
     //-----------------
+    // lhs>=rhs
     template<typename T>
     bool operator>=(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs) { return (lhs.get() >= rhs.get()); }
+    // lhs>=0
     template<typename T>
     bool operator>=(nullptr_t, const SharedPointer<T>& rhs) { return (lhs.get() >= nullptr); }
+    // 0>=rhs
     template<typename T>
     bool operator>=(const SharedPointer<T>& lhs, nullptr_t) { return (lhs.get() >= nullptr); }
 
     //-----------------
+    // lhs<=rhs
     template<typename T>
     bool operator<=(const SharedPointer<T>& lhs, const SharedPointer<T>& rhs) { return (lhs.get() <= rhs.get()); }
+    // lhs<=0
     template<typename T>
     bool operator<=(nullptr_t, const SharedPointer<T>& rhs) { return (lhs.get() <= nullptr); }
+    // 0<=rhs
     template<typename T>
     bool operator<=(const SharedPointer<T>& lhs, nullptr_t) { return (lhs.get() <= nullptr); }
 

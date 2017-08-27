@@ -2,24 +2,18 @@
 #ifndef LDL_POOLED_ARRAY_H_
 #define LDL_POOLED_ARRAY_H_
 
-#include "pool.h"
 #include "pooled_new.h"
-
-#include <cstdint>
-namespace c11 {
-    using namespace std;
-}
 
 namespace ldl {
 
-    /// Class that wraps an array of the specified type allocated from pooled memory.
-    /// for classes, inheriting from PooledNew<T> adds new[] and delete[] operators that allow pooled arrays to be constructed
-    /// "normally".
+    /// Class that wraps an array of the specified non class type allocated from pooled memory.
+    /// For class types, inheriting from PooledNew<T> will add new[] and delete[] operators that allow
+    /// arrays of objects to be constructed and destroyed using new[] and delete[].
     /// However this doesn't work for non-class types that can't inherit from a base class. (e.g., uint8_t)
-    /// Instead, this class tries to duplicate the c11::array class, except with a constructor that sets the array size when
-    /// (or after) the object is constructed.
+    /// Instead, this class tries to duplicate the c11::array class, except its size is specified at runtime.
     template<typename T>
-    class PooledArray {
+    class PooledArray : public PooledNew<int> {
+        // FIXME need to call PooledNew::SetElementSize(sizeof(PooledArray<T>)) manually
     public:
 
         typedef T value_type;
@@ -37,7 +31,7 @@ namespace ldl {
         PooledArray(const PooledArray& other);
 
         // set size constructor
-        PooledArray(std::size_t numel);
+        PooledArray(size_t numel);
 
         // destructor
         ~PooledArray();
@@ -45,8 +39,8 @@ namespace ldl {
         // copy assignment operator
         PooledArray& operator=(const PooledArray& other);
 
-        // set the size of an uninitialized object.
-        void SetSize(std::size_t numel);
+        // initialize an uninitialized object to the specified size.
+        void Initialize(size_t numel);
 
         // swap contents with another object
         void swap(PooledArray& other);
@@ -68,10 +62,10 @@ namespace ldl {
         //---
 
         // return size of array
-        std::size_t size() const;
+        size_t size() const;
 
         // return size of array
-        std::size_t max_size() const;
+        size_t max_size() const;
 
         // return true if array is initialized
         operator bool() const;
@@ -80,16 +74,16 @@ namespace ldl {
         void fill(const value_type& val);
 
         // return reference to element n
-        value_type& operator[](std::size_t n);
+        value_type& operator[](size_t n);
 
         // return const reference to element n
-        value_type const& operator[](std::size_t n) const;
+        value_type const& operator[](size_t n) const;
 
         // return reference to element n
-        value_type& at(std::size_t n);
+        value_type& at(size_t n);
 
         // return const reference to element n
-        value_type const& at(std::size_t n) const;
+        value_type const& at(size_t n) const;
 
         // return reference to element 0.
         value_type& front();
@@ -112,43 +106,47 @@ namespace ldl {
     private:
 
         // allocate and construct buffer
-        void ConstructData(size_t numel);
+        void NewBuffer(size_t numel);
 
         // destroy and deallocate buffer
-        void DestroyData();
+        void DeleteBuffer();
 
         //----
 
-        std::size_t numel_;
+        size_t numel_;
 
-        value_type* data_;
+        value_type* buffer_;
 
         //---------------
 
     public:
 
         // Increase the size of pool[numel] by num_blocks.
-        static void IncreasePoolSize(std::size_t numel, std::size_t num_blocks);
+        static void IncreaseBufferPoolSize(size_t numel, size_t num_blocks);
 
         // Set the growth_step for the pool that holds buffers of size sizeof(T[numel])
-        static void SetPoolGrowthStep(std::size_t numel, int growth_step);
+        static void SetBufferPoolGrowthStep(size_t numel, int growth_step);
 
         // Get the growth_step for the pool that holds buffers of size sizeof(T[numel])
-        static int GetPoolGrowthStep(std::size_t numel);
+        static int GetBufferPoolGrowthStep(size_t numel);
 
         // Get the number of unallocated blocks in the pool that holds buffers of size sizeof(T[numel])
-        static std::size_t GetPoolFree(std::size_t numel);
+        static size_t GetBufferPoolFree(size_t numel);
 
         // Get the total number of blocks (allocated and unallocat3ed) in the pool that holds buffers of size sizeof(T[numel])
-        static std::size_t GetPoolSize(std::size_t numel);
+        static size_t GetBufferPoolSize(size_t numel);
+
+        // return true if the pool that  holds buffers of size sizeof(T[numel]) is empty
+        static bool BufferPoolIsEmpty(size_t numel);
 
     private:
 
-        static PoolList pool_list_;
+        // size of individual elements in buffer (in bytes)
+        static const size_t buffer_element_size_ = sizeof(T);
 
     }; //class PooledArray
 
-       // return true if two objects have identical contents
+    // return true if two objects have identical contents
     template<typename T>
     bool operator==(const PooledArray<T>& lhs, const PooledArray<T>& rhs);
 

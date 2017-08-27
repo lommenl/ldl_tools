@@ -2,6 +2,8 @@
 #ifndef LINKED_LIST_H_
 #define LINKED_LIST_H_
 
+#include "pooled_new.h"
+
 namespace ldl {
 
     //===============
@@ -22,7 +24,8 @@ namespace ldl {
     //===============
     /// Class defining a linked list of pointers to objects which inherit from class Linkabke<>.
     template<typename T>
-    class LinkedList {
+    class LinkedList : public PooledNew<int> {
+        // FIXME need to call PooledNew::SetElementSize(sizeof(LinkedList<T>)) manually
     public:
 
         /// Template class for defining iterator and const_iterator.
@@ -84,7 +87,7 @@ namespace ldl {
         bool empty() const;
 
         // return number of elements in list
-        std::size_t size() const;
+        size_t size() const;
 
         // return iterator to beginning of list
         iterator begin();

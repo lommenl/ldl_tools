@@ -2,10 +2,12 @@
 #ifndef SHARED_POINTER_H
 #define SHARED_POINTER_H
 
-#include <functional>
-#include <mutex>
+#include "pooled_new.h"
+#include "pooled_mutex.h"
+
 #include <ostream>
 
+#include <functional>
 namespace c11 {
     using namespace std;
 }
@@ -14,42 +16,35 @@ namespace ldl {
 
     /// Almost-duplicate of c11::shared_ptr that does not perform internal
     /// memory allocations. Instead it uses a linked list to identify the owners of a given pointer.
-    /// If a mutex argument is provided in an object constructor, it is used to ensure thread-safe
-    /// access to the list of pointer owners.
-    /// The provided mutex is unlocked, but NOT deleted when the last owner deletes the mangaged object.
-    /// The mutex is passed in as an argument to avoid having to allocate one internally.
+    ///
     template<typename T>
-    class SharedPointer {
+    class SharedPointer : public PooledNew<int> {
     public:
 
         /// Type of the managed object.
         typedef T element_type;
 
-        /// Type of mutex.
-        typedef c11::mutex Mutex;
-
         // type signature of deleter function
         typedef c11::function<void(element_type*)> Deleter;
+
+        //---
 
         //default constructor
         SharedPointer();
 
-        //construct w/ mutex
-        SharedPointer(Mutex& mx);
-
-        // Construct from pointer and optional mutex
+        // Construct from pointer
         template<typename U>
-        SharedPointer(U* ptr, Mutex& mx = *static_cast<Mutex*>(nullptr) );
+        SharedPointer(U* ptr);
 
-        // construct from null pointer and optional mutex
-        SharedPointer(nullptr_t, Mutex& mx = *static_cast<Mutex*>(nullptr) );
+        // construct from null pointer
+        SharedPointer(nullptr_t);
 
-        // construct from pointer, deleter, and optional mutex
+        // construct from pointer and deleter
         template<typename U>
-        SharedPointer(U* ptr, Deleter del, Mutex& mx = *static_cast<Mutex*>(nullptr));
+        SharedPointer(U* ptr, Deleter deleter);
 
-        // construct from null pointer, deleter, and optional mutex
-        SharedPointer(nullptr_t, Deleter del, Mutex& mx = *static_cast<Mutex*>(nullptr));
+        // construct from null pointer and deleter
+        SharedPointer(nullptr_t, Deleter deleter);
 
         // copy constructor
         SharedPointer(SharedPointer& other);
@@ -75,17 +70,13 @@ namespace ldl {
         // releases ownership of any currently owned object.
         void reset();
 
-        // reset state to be as if object were constructed by SharedPointer(mx)
-        // releases ownership of any currently owned object.
-        void reset(Mutex& mx);
-
-        // reset object and then swap it with a new object constructed by SharedPointer(ptr,mx)
+        // reset object and then swap it with a new object constructed by SharedPointer(ptr)
         template<typename U>
-        void reset(U* ptr, Mutex& mx = *static_cast<Mutex*>(0) );
+        void reset(U* ptr);
 
-        // reset object and then swap it with a new object constructed by SharedPointer(ptr,del,mx)
+        // reset object and then swap it with a new object constructed by SharedPointer(ptr,del)
         template<typename U>
-        void reset(U* ptr, Deleter del, Mutex& mx = *static_cast<Mutex*>(0) );
+        void reset(U* ptr, Deleter deleter);
 
         // return a plain pointer to managed object
         element_type* get() const;
@@ -107,39 +98,26 @@ namespace ldl {
 
     private:
 
-        /// Function class with operator()(T* ptr) member function that calls del( static_cast<U*>(ptr) )
+        /// Function class with operator()(T* ptr) member function that calls deleter( static_cast<U*>(ptr) )
         /// Used to delete an object of type U, that is managed by a SharedPointer<T>.
         template< typename U>
         class CastDeleter {
             typedef c11::function<void(U*)> Deleter;
             Deleter deleter_;
         public:
-            CastDeleter(Deleter del) : deleter_(del) {}
+            CastDeleter(Deleter deleter) : deleter_(deleter) {}
             void operator()(T* ptr) {
                 deleter_(static_cast<U*>(ptr) )
             }
         };
 
         // type of lock guard used to control mutex.
-        typedef c11::lock_guard<SharedPointer> ListLock;
-
-        // allow ListLock class to access lock() and unlock()
-        friend class ListLock;
-
-        // Function to make this class usable as an argument to the ListLock constructor.
-        // This allows the use of a mutex to be optional.
-        // if mutex_ptr_ == 0 , it does nothing, otherise it calls mutex_ptr_.lock()
-        void lock();
-
-        // Function to make this class usable as an argument to the ListLock constructor.
-        // This allows the use of a mutex to be optional.
-        // if mutex_ptr_ == 0 , it does nothing, otherise it calls mutex_ptr_.unlock()
-        void unlock();
+        typedef c11::lock_guard<PooledMutex> ListLock;
 
         //------------
 
-        // pointer to optional mutex (pointer makes it copyable/swapable.)
-        Mutex* mutex_ptr_;
+        // pointer to mutex (pointer makes it poolable and copyable/swapable.)
+        PooledMutex* mutex_ptr_;
 
         // pointer to previous object in linked list of owners.
         SharedPointer* prev_ptr_;
@@ -154,10 +132,6 @@ namespace ldl {
         Deleter deleter_;
 
     };
-
-    // swap states of two objects.
-    template<typename T>
-    void swap(SharedPointer<T>& lhs, SharedPointer<T>& rhs);
 
     // Equality comparison operators
     template<typename T>

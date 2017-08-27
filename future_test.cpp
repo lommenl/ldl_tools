@@ -1,6 +1,7 @@
 #include "boost/test/unit_test.hpp"
 
 #include "future.h"
+#include "pooled_mutex.h"
 
 #include <thread>
 #include <functional>
@@ -27,12 +28,15 @@ BOOST_AUTO_TEST_CASE( future_test )
     try {
 
         // allocate space for one state
+        ldl::FutureState<int>::SetElementSize(sizeof ldl::FutureState<int>); //FIXME
         ldl::FutureState<int>::IncreasePoolSize(1);
+
+        //Future uses SharedPointer, which needs a PooledMutex
+        ldl::PooledMutex::IncreasePoolSize(10);
 
         ldl::Promise<int> prom;
 
-        ldl::Future<int> fut;
-        fut.swap(prom.get_future()); // move assignment via swap
+        ldl::Future<int> fut = prom.get_future();
 
         // spawn thread
         c11::thread th(c11::bind(promise_thread, &prom, 1));
@@ -47,7 +51,7 @@ BOOST_AUTO_TEST_CASE( future_test )
         ldl::Promise<int> prom2;
 
         ldl::Future<int> fut2;
-        fut2.swap(prom2.get_future()); // move assignment
+        fut2.swap(prom2.get_future());
 
         c11::thread th2(c11::bind(promise_thread, &prom2, 2));
 

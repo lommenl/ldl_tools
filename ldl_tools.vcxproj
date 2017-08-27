@@ -142,6 +142,7 @@
     <ClInclude Include="pool.h" />
     <ClInclude Include="pooled_array.h" />
     <ClInclude Include="pooled_array.hpp" />
+    <ClInclude Include="pooled_mutex.h" />
     <ClInclude Include="pooled_new.h" />
     <ClInclude Include="pooled_new.hpp" />
     <ClInclude Include="pool_allocator.h" />

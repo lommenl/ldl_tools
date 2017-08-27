@@ -16,15 +16,16 @@ namespace ldl {
 
     //-------------
     template<typename T>
-    struct FutureState : public PooledNew<TemplateClass> {
-        //need to set PooledNew::element_size explicitly.
-
-        // synchronization condition_variable
-        c11::condition_variable cv;
+    struct FutureState : public PooledNew<UnknownElementSize> {
+        // FIXME need to call PooledNew::SetElementSize(sizeof(FutureState<T>)) manually
 
         // mutex for cv.wait()
         c11::mutex mutex;
 
+        // synchronization condition_variable
+        c11::condition_variable cv;
+
+        // flag for detecting spurious cv wake ups.
         bool notified;
 
         // flag indicating that promise has set value (or is being destroyed).
@@ -50,11 +51,18 @@ namespace ldl {
     //-------------
     /// A class that can block execution until it receives a shared value set by a Promise object.
     template<typename T>
-    class Future {
+    class Future : public PooledNew<int> {
+        // FIXME need to call PooledNew::SetElementSize(sizeof(Future<T>)) manually
     public:
 
         // construct an empty object (no shared state).
         Future();
+
+        // move constructor 
+        Future(Future&);
+
+        // move assignment operator
+        Future& operator=(Future&);
 
         // allows us to move-assign and move-construct Future objects with a pre-C11 compiler.
         void swap(Future& other);
@@ -85,10 +93,6 @@ namespace ldl {
 
     private:
 
-        // no copying
-        Future(const Future&); // = delete;
-        Future& operator=(const Future&); // = delete;
-
         // only Promise objects can construct valid Future objects.
         template<typename U>
         friend class Promise;
@@ -104,8 +108,8 @@ namespace ldl {
 
     //-------------
     template<typename T>
-    class Promise : public PooledNew<TemplateClass> {
-        // need to set PooledNew::element_size explicitly
+    class Promise : public PooledNew<int> {
+        // FIXME need to call PooledNew::SetElementSize(sizeof(Promie<T>)) manually
 
     public:
 
