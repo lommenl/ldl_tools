@@ -29,7 +29,7 @@ namespace ldl {
 
         //---
 
-        //default constructor
+        //Default constructor
         SharedPointer();
 
         // Construct from pointer
@@ -49,7 +49,7 @@ namespace ldl {
         // copy constructor
         SharedPointer(SharedPointer& other);
 
-        // copy constructor from different managed object type
+        // copy constructor from different SharedPointer type
         template<typename U>
         SharedPointer(SharedPointer<U>& other);
 
@@ -59,7 +59,7 @@ namespace ldl {
         // copy assignment operator
         SharedPointer& operator=(SharedPointer& other);
 
-        // copy assignment from different managed object type
+        // copy assignment from different SharedPointer type
         template<typename U>
         SharedPointer& operator=(SharedPointer<U>& other);
 
@@ -70,11 +70,11 @@ namespace ldl {
         // releases ownership of any currently owned object.
         void reset();
 
-        // reset object and then swap it with a new object constructed by SharedPointer(ptr)
+        // reset object and then initialize it as if constructed by SharedPointer(ptr)
         template<typename U>
         void reset(U* ptr);
 
-        // reset object and then swap it with a new object constructed by SharedPointer(ptr,del)
+        // reset object and then initialize it as if constructed by SharedPointer(pt,deleterr)
         template<typename U>
         void reset(U* ptr, Deleter deleter);
 
@@ -94,7 +94,7 @@ namespace ldl {
         bool unique();
 
         // return true if this object is managing an object.
-        explicit operator bool() const;
+        operator bool() const;
 
     private:
 
