@@ -1,7 +1,9 @@
 #include "boost/test/unit_test.hpp"
 
 #include "future.h"
+
 #include "pooled_mutex.h"
+#include "pool_allocator.h"
 
 #include <thread>
 #include <functional>
@@ -21,41 +23,41 @@ void promise_thread(ldl::Promise<int>* prom, int val) {
 
 BOOST_AUTO_TEST_CASE( future_test )
 {
-    std::cout << "============================" << std::endl;
-    std::cout << "Starting future_test" << std::endl;
-    std::cout << "============================" << std::endl;
-
     try {
 
-        // allocate space for one state
-        ldl::FutureState<int>::SetElementSize(sizeof ldl::FutureState<int>); //FIXME
-        ldl::FutureState<int>::IncreasePoolSize(1);
+        std::cout << "============================" << std::endl;
+        std::cout << "Starting future_test" << std::endl;
+        std::cout << "============================" << std::endl;
 
-        //Future uses SharedPointer, which needs a PooledMutex
-        ldl::PooledMutex::IncreasePoolSize(10);
+        // let all pools grow as needed
+        ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
 
-        ldl::Promise<int> prom;
+        ldl::SharedPointer<ldl::Promise<int>> prom_ptr(new ldl::Promise<int>());
 
-        ldl::Future<int> fut = prom.get_future();
+        ldl::SharedPointer<ldl::Future<int>> fut_ptr(new ldl::Future<int>());
+        *fut_ptr = prom_ptr->get_future();
 
         // spawn thread
-        c11::thread th(c11::bind(promise_thread, &prom, 1));
+        c11::thread th(c11::bind(promise_thread, prom_ptr.get(), 1));
 
-        int val = fut.get();
+        int val = fut_ptr->get();
 
         BOOST_CHECK_EQUAL(val, 1);
 
         th.join();
 
+        prom_ptr.reset();
+        fut_ptr.reset();
+
         //repeat
-        ldl::Promise<int> prom2;
+        ldl::Promise<int> prom;
 
-        ldl::Future<int> fut2;
-        fut2.swap(prom2.get_future());
+        ldl::Future<int> fut;
+        fut.swap(prom.get_future());
 
-        c11::thread th2(c11::bind(promise_thread, &prom2, 2));
+        c11::thread th2(c11::bind(promise_thread, &prom, 2));
 
-        int val2 = fut2.get();
+        int val2 = fut.get();
 
         BOOST_CHECK_EQUAL(val2, 2);
 

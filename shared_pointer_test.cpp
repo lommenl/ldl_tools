@@ -1,22 +1,23 @@
 #include "boost/test/unit_test.hpp"
 
 #include "shared_pointer.h"
+
 #include "pooled_mutex.h"
+#include "pool_allocator.h"
 
 #include <iostream>
 
 //-------------------------------------------
-BOOST_AUTO_TEST_CASE( shared_pointer_test )
+BOOST_AUTO_TEST_CASE(shared_pointer_test)
 {
 
-    std::cout << "========================" << std::endl;
-    std::cout << "Starting shared_ptr_test" << std::endl;
-    std::cout << "========================" << std::endl;
-
     try {
+        std::cout << "========================" << std::endl;
+        std::cout << "Starting shared_ptr_test" << std::endl;
+        std::cout << "========================" << std::endl;
 
-        // create a pool of 10 PooledMutex objects for use by SharedPointer
-        ldl::PooledMutex::IncreasePoolSize(10);
+        // allow all pools to grow automatically
+        ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
 
         // default constructor
         ldl::SharedPointer<int> s1;
@@ -32,7 +33,7 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         BOOST_CHECK_EQUAL(s2.use_count(), 1);
         BOOST_CHECK_EQUAL(s2.unique(), true);
         BOOST_CHECK_EQUAL((bool)s2, true);
-        BOOST_CHECK_EQUAL(s2.get()==nullptr, false);
+        BOOST_CHECK_EQUAL(s2.get() == nullptr, false);
         BOOST_CHECK_EQUAL(*s2, 11);
 
         //----
@@ -58,13 +59,13 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         BOOST_CHECK_EQUAL(s1.use_count(), 1);
         BOOST_CHECK_EQUAL(s1.unique(), true);
         BOOST_CHECK_EQUAL((bool)s1, true);
-        BOOST_CHECK_EQUAL(s1.get()==s2.get(),false);
+        BOOST_CHECK_EQUAL(s1.get() == s2.get(), false);
         BOOST_CHECK_EQUAL(*s1, 11);
 
         BOOST_CHECK_EQUAL(s2.use_count(), 1);
         BOOST_CHECK_EQUAL(s2.unique(), true);
         BOOST_CHECK_EQUAL((bool)s2, true);
-        BOOST_CHECK_EQUAL(s1.get()==s2.get(),false);
+        BOOST_CHECK_EQUAL(s1.get() == s2.get(), false);
         BOOST_CHECK_EQUAL(*s2, -10);
 
         //----
@@ -79,7 +80,7 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         BOOST_CHECK_EQUAL(s2.use_count(), 1);
         BOOST_CHECK_EQUAL(s2.unique(), true);
         BOOST_CHECK_EQUAL((bool)s2, true);
-        BOOST_CHECK_EQUAL(s1.get()==s2.get(),false);
+        BOOST_CHECK_EQUAL(s1.get() == s2.get(), false);
         BOOST_CHECK_EQUAL(*s2, -10);
         // -----
 
@@ -153,7 +154,6 @@ BOOST_AUTO_TEST_CASE( shared_pointer_test )
         // -----
         // TODO:
         // SharedPointer(ptr,del)
-        // operator=(SharedPointer<U,M>&)
         // reset(ptr)
         // reset(ptr,del)
         // operator->()

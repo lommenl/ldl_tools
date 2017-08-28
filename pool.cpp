@@ -15,8 +15,8 @@ namespace ldl {
     //--------------
     Pool::Pool()
         : block_size_(0)
-        , tos_(0)
         , growth_step_(0)
+        , tos_(0)
     {}
 
     //--------------
@@ -38,8 +38,8 @@ namespace ldl {
     {
         if (this != &other) {
             std::swap(block_size_, other.block_size_);
-            std::swap(tos_, other.tos_);
             std::swap(growth_step_, other.growth_step_);
+            std::swap(tos_, other.tos_);
             std::swap(stack_, other.stack_);
         }
     }
@@ -51,21 +51,22 @@ namespace ldl {
             throw std::runtime_error("invalid block_size argument");
         }
         block_size_ = block_size;
-        tos_ = 0;
         growth_step_ = growth_step;
+        tos_ = 0;
     }
 
     //-----------------
     void Pool::IncreaseSize(size_t num_blocks)
     {
         stack_.resize(stack_.size() + num_blocks);
+        size_t padded_block_size = (block_size_ + 7) >> 3;
         for (size_t ix = 0; ix < num_blocks; ++ix) {
             // for each new element allocate raw memory from the heap and push it onto the stack
             // allocate uint64_t to get 64-bit alignment for all blocks (round up)
-            Push(new uint64_t[(block_size_ + 7) >> 3]);
+            Push(new uint64_t[padded_block_size]);
         }
 #ifdef _DEBUG
-        std::cout << "Called new uint64_t[" << ((block_size_ + 7) >> 3) << "] ("
+        std::cout << "Called new uint64_t[" << padded_block_size << "] ("
             << block_size_ << " bytes) " << num_blocks << " times" << std::endl;
 #endif
     }
@@ -119,6 +120,7 @@ namespace ldl {
                 IncreaseSize(static_cast<size_t>(growth_step_));
             }
             else if (growth_step_ < 0) { // growth step is negative inverse of a scale factor. (e.g. -3 = a scale factor of 1/3
+                // always grow by at least 1.
                 IncreaseSize(std::max<size_t>(1, stack_.size() / static_cast<size_t>(-growth_step_)));
             }
             else { // growth_step == 0 // no growth allowed
@@ -144,12 +146,22 @@ namespace ldl {
     }
 
     //================================
+    PoolList::PoolList()
+        : default_growth_step_(0)
+    {}
+
+    //--------------
+    size_t PoolList::GetMaxPoolBlockSize() const
+    {
+        return MAX_BLOCK_SIZE_;
+    }
 
     //--------------
     bool PoolList::HasPool(size_t block_size) const
     {
         return (pool_map_.count(block_size) != 0);
     }
+
     //--------------
     Pool& PoolList::GetPool(size_t block_size)
     {
@@ -239,12 +251,6 @@ namespace ldl {
     }
 
     //--------------
-    size_t PoolList::GetMaxPoolBlockSize() const
-    {
-        return MAX_BLOCK_SIZE_;
-    }
-
-    //--------------
     void* PoolList::Pop(size_t block_size)
     {
         return GetPool(block_size).Pop(); // GetPool() may create the pool
@@ -255,90 +261,5 @@ namespace ldl {
     {
         GetPool(block_size).Push(ptr); // GetPool() may create the pool
     }
-
-    //==================================================
-
-    //--------------
-    bool StaticPoolList::HasPool(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.HasPool(block_size);
-    }
-
-    //--------------
-    Pool& StaticPoolList::GetPool(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.GetPool(block_size);
-    }
-
-    //--------------
-    void StaticPoolList::IncreasePoolSize(size_t block_size, size_t num_blocks)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        pool_list_.IncreasePoolSize(block_size,num_blocks);
-    }
-
-    //--------------
-    void StaticPoolList::SetPoolGrowthStep(size_t block_size, int growth_step)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        pool_list_.SetPoolGrowthStep(block_size,growth_step);
-    }
-
-    //--------------
-    int StaticPoolList::GetPoolGrowthStep(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.GetPoolGrowthStep(block_size);
-    }
-
-    //--------------
-    size_t StaticPoolList::GetPoolFree(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.GetPoolFree(block_size);
-    }
-
-    //--------------
-    size_t StaticPoolList::GetPoolSize(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.GetPoolSize(block_size);
-    }
-
-    //--------------
-    bool StaticPoolList::PoolIsEmpty(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.PoolIsEmpty(block_size);
-    }
-
-    //--------------
-    size_t StaticPoolList::GetMaxPoolBlockSize()
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.GetMaxPoolBlockSize();
-    }
-
-    //--------------
-    void* StaticPoolList::Pop(size_t block_size)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        return pool_list_.Pop(block_size);
-    }
-
-    //--------------
-    void StaticPoolList::Push(size_t block_size, void* ptr)
-    {
-        c11::lock_guard<c11::mutex> lock(mutex_);
-        pool_list_.Push(block_size,ptr);
-    }
-
-    //--------------
-    c11::mutex StaticPoolList::mutex_;
-
-    //--------------
-    PoolList StaticPoolList::pool_list_;
 
 } //namespace ldl

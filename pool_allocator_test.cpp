@@ -13,7 +13,7 @@ BOOST_AUTO_TEST_CASE( pool_allocator_test )
 
     try {
         // set growth_step for all pools to 10
-        ldl::PoolAllocator<int>::SetPoolGrowthStep(0, 10);
+        ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
 
         typedef std::vector<int, ldl::PoolAllocator<void> > PoolVector;
 

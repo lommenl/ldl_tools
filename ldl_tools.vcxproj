@@ -140,8 +140,6 @@
     <ClInclude Include="linked_list.h" />
     <ClInclude Include="linked_list.hpp" />
     <ClInclude Include="pool.h" />
-    <ClInclude Include="pooled_array.h" />
-    <ClInclude Include="pooled_array.hpp" />
     <ClInclude Include="pooled_mutex.h" />
     <ClInclude Include="pooled_new.h" />
     <ClInclude Include="pooled_new.hpp" />
@@ -157,8 +155,8 @@
     <ClCompile Include="linked_list_test.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pool.cpp" />
-    <ClCompile Include="pooled_array_test.cpp" />
     <ClCompile Include="pooled_new_test.cpp" />
+    <ClCompile Include="pool_allocator.cpp" />
     <ClCompile Include="pool_allocator_test.cpp" />
     <ClCompile Include="shared_pointer_test.cpp" />
   </ItemGroup>

@@ -1,7 +1,9 @@
 #include "boost/test/unit_test.hpp"
 
 #include "pooled_new.h"
+
 #include "shared_pointer.h"
+#include "pool_allocator.h"
 
 #include <iostream>
 
@@ -18,6 +20,9 @@ BOOST_AUTO_TEST_CASE( pooled_new_test )
         std::cout << "============================" << std::endl;
         std::cout << "Starting pooled_new_test" << std::endl;
         std::cout << "============================" << std::endl;
+
+        // let all pools grow as needed
+        ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
 
         foo::SetPoolGrowthStep(1);
         BOOST_CHECK_EQUAL(foo::GetPoolGrowthStep(), 1);

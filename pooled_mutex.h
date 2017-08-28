@@ -11,18 +11,9 @@ namespace c11 {
 
 namespace ldl {
 
-    class PooledMutex : public PooledNew<PooledMutex> {
-    public:
-        typedef c11::mutex::native_handle_type native_handle_type;
-        PooledMutex() {}
-        void lock() { mutex_.lock(); }
-        bool try_lock() { return mutex_.try_lock(); }
-        void unlock() { mutex_.unlock(); }
-        native_handle_type native_handle() { return mutex_.native_handle(); }
-    private:
-        PooledMutex(const PooledMutex&); //= delete;
-        c11::mutex mutex_;
-    };
+    // add Pool allocators to the standard mutex type.
+    // default constructors, etc. are all good
+    class PooledMutex : public c11::mutex, public PooledNew<PooledMutex> {};
 
 } //namespace ldl
 

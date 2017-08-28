@@ -12,7 +12,7 @@ namespace c11 {
 
 namespace ldl {
 
-    // Class defining a stack of pointers to memory blocks.
+    // Class defining a stack of pointers to memory blocks allocated from the heap.
     class Pool {
     public:
         // default constructor
@@ -74,11 +74,11 @@ namespace ldl {
         // number of bytes in each block
         size_t block_size_;
 
-        // top of stack
-        size_t tos_;
-
         // Number of blocks to automatically add to stack_ if it becomes empty.
         int growth_step_;
+
+        // top of stack
+        size_t tos_;
 
         // Stack of pointers to allocated block_size_ byte memory blocks
         std::vector<void*> stack_;
@@ -86,14 +86,18 @@ namespace ldl {
     }; // class Pool
 
     //---------------------------------
-    /// Class that manages multiple pools of different sizes.
+    /// Class that manages multiple Pool objects of different sizes.
     class PoolList {
+
+        //maximum value of block_size allowed in pool_list_
+        static const size_t MAX_BLOCK_SIZE_ = static_cast<size_t>(1E9);
+
     public:
         // Default constructor
-        PoolList() = default;
+        PoolList();
 
-        // destructor
-        ~PoolList() = default;
+        // Return largest possible block_size that can be created in pool_list.
+        size_t GetMaxPoolBlockSize() const;
 
         /// Return true if pool of specified block size exists in pool_map
         bool HasPool(size_t block_size) const;
@@ -129,9 +133,6 @@ namespace ldl {
         // return true if there are no free blocks in pool_list[block_size]
         bool PoolIsEmpty(size_t block_size) const;
 
-        // Return largest possible block_size that can be created in pool_list.
-        size_t GetMaxPoolBlockSize() const;
-
         // pop a block from pool_list[block_size]
         void* Pop(size_t block_size);
 
@@ -143,71 +144,16 @@ namespace ldl {
         PoolList(const PoolList&); //= delete;
         PoolList& operator=(const PoolList&); //= delete;
 
-        //maximum value of block_size allowed in pool_list
-        static const size_t MAX_BLOCK_SIZE_ = static_cast<size_t>(1E9);
-
         // default value of growth_step_ for all pools
          int default_growth_step_;
 
-        // A map of multiple Pool objects keyed by their block_size.
+        // type defining a map of multiple Pool objects keyed by their block_size.
          typedef std::map<size_t, Pool> PoolMap;
+
+        // A map of multiple Pool objects keyed by their block_size.
          PoolMap pool_map_;
 
     }; // class PoolList
-
-    //-----------------
-    /// Class declaring a static PoolList
-    /// All classes that access or inherit from this class will share the same PoolList.
-    class StaticPoolList {
-    public:
-        /// Return a reference to pool_list[block_size]
-        /// Will create an empty pool with default_growth_step if it doesn't already exist.
-        static Pool& GetPool(size_t block_size);
-
-        /// increase the size of pool_list[block_size] by num_blocks blocks.
-        static void IncreasePoolSize(size_t block_size, size_t num_blocks);
-
-        // Set the number of blocks to automatically add to pool_list[block_size] if it becomes empty.
-        // Using block_size = 0 sets the growth_step value for all current and future pools.
-        // Otherwise only the value of pool_list[block_size] is set.
-        // setting growth_step > 0 automatically increases the pool size by  +growth_step blocks when it is empty.
-        // setting growth_step < 0 automatically increases the pool size by current_capacity/(-growth_step) when it is empty.
-        // setting growth_step = 0 disables automatic growth of a pool.
-        static void SetPoolGrowthStep(size_t block_size, int growth_step);
-
-        // Return the number of blocks that will be automatically added to pool_list[block_size] if it becomes empty.
-        // setting block_size=0 returns the default value that will be assigned to new pools when they are created.
-        static int GetPoolGrowthStep(size_t block_size);
-
-        // return current number of unallocated blocks in pool_list[block_size]
-        static size_t GetPoolFree(size_t block_size);
-
-        // return total number of blocks (unallocated and allocated) in pool_list[block_size]
-        static size_t GetPoolSize(size_t block_size);
-
-        // return true if pool_list[block_size] has no unallocated blocks.
-        static bool PoolIsEmpty(size_t block_size);
-
-        // Return the maximum possible value of block_size.
-        static size_t GetMaxPoolBlockSize();
-
-        // pop a block from pool_list[block_size]
-        static void* Pop(size_t block_size);
-
-        // push a block onto pool_list[block_size]
-        static void Push(size_t block_size, void* ptr);
-
-    private:
-        /// return true if pool_list[block_size] size exists.
-        static bool HasPool(size_t block_size);
-
-        //---
-
-        static c11::mutex mutex_;
-
-        static PoolList pool_list_;
-
-    };
 
 } //namespace ldl
 

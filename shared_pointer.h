@@ -7,6 +7,7 @@
 
 #include <ostream>
 
+#include<mutex>
 #include <functional>
 namespace c11 {
     using namespace std;
@@ -14,18 +15,58 @@ namespace c11 {
 
 namespace ldl {
 
+    // Base class for SharedPointer<> that holds member variables
+    class SharedPointerBase : public PooledNew<SharedPointerBase> {
+        template<typename T>
+        friend class SharedPointer;
+    protected:
+
+        //Default constructor (empty)
+        SharedPointerBase()
+            : mutex_ptr_(0)
+            , prev_ptr_(0)
+            , next_ptr_(0)
+            , void_ptr_(0)
+            , deleter_ptr_(0)
+        {}
+
+        //since SharedPointerBase doesn't know how to delete T, let the derived classes clean things up
+        //~delete();
+
+        //---
+
+        // Type of Deleter static function
+        typedef void(*VoidDeleter)(void*);
+
+        // pointer to mutex (pointer makes it poolable and copyable/swapable.)
+        PooledMutex* mutex_ptr_;
+
+        // pointer to previous object in linked list of owners.
+        SharedPointerBase* prev_ptr_;
+
+        // pointer to next object in linked list of owners.
+        SharedPointerBase* next_ptr_;
+
+        // managed pointer
+        void* void_ptr_;
+
+        // pointer to static function called to delete void_ptr_
+        VoidDeleter deleter_ptr_;
+
+    }; //SharedPointerBase
+
     /// Almost-duplicate of c11::shared_ptr that does not perform internal
     /// memory allocations. Instead it uses a linked list to identify the owners of a given pointer.
-    ///
     template<typename T>
-    class SharedPointer : public PooledNew<int> {
+    class SharedPointer : public SharedPointerBase {
     public:
 
-        /// Type of the managed object.
+        /// Type of the managed pointer.
         typedef T element_type;
 
-        // type signature of deleter function
-        typedef c11::function<void(element_type*)> Deleter;
+        /// Type of function pointer to a Deleter function.
+        /// Not an std::function<> object because std::function<> may do internal memory allocations.
+        typedef void(*Deleter)(T*);
 
         //---
 
@@ -49,89 +90,72 @@ namespace ldl {
         // copy constructor
         SharedPointer(SharedPointer& other);
 
-        // copy constructor from different SharedPointer type
+        // copy constructor from a different SharedPointer specialization
         template<typename U>
         SharedPointer(SharedPointer<U>& other);
 
         // destructor
         ~SharedPointer();
 
-        // copy assignment operator
-        SharedPointer& operator=(SharedPointer& other);
-
-        // copy assignment from different SharedPointer type
+        // Copy assignment operator
         template<typename U>
         SharedPointer& operator=(SharedPointer<U>& other);
 
         // swap state of two objects.
-        void swap(SharedPointer& other);
+        void swap(SharedPointer<T>& other);
 
-        // reset state to be as if object were default constructed.
-        // releases ownership of any currently owned object.
+        // Reset object to an empty state.
+        // Releases ownership of any currently owned object.
         void reset();
 
-        // reset object and then initialize it as if constructed by SharedPointer(ptr)
+        // reset object and then reinitialize it as if constructed by SharedPointer(ptr)
         template<typename U>
         void reset(U* ptr);
 
-        // reset object and then initialize it as if constructed by SharedPointer(pt,deleterr)
+        // reset object and then reinitialize it as if constructed by SharedPointer(ptr, deleter)
         template<typename U>
         void reset(U* ptr, Deleter deleter);
 
-        // return a plain pointer to managed object
+        // return the managed pointer.
         element_type* get() const;
 
-        // dereference managed object
+        // dereference the managed pointer
         element_type& operator*() const;
 
-        // dereference managed object for calling a member function.
+        // dereference the managed pointer for accessing its members.
         element_type* operator->() const;
 
-        // return number of objects sharing the managed object. (0 if this object is empty)
-        long int use_count();
-
-        // return true if this object is managing an object and it is the only owner.
-        bool unique();
-
-        // return true if this object is managing an object.
+        // return true if this object is managing a pointer.
         operator bool() const;
 
-    private:
+        // return the number of objects holding the same pointer as *this. (0 if this object is empty)
+        long int use_count();
 
-        /// Function class with operator()(T* ptr) member function that calls deleter( static_cast<U*>(ptr) )
-        /// Used to delete an object of type U, that is managed by a SharedPointer<T>.
-        template< typename U>
-        class CastDeleter {
-            typedef c11::function<void(U*)> Deleter;
-            Deleter deleter_;
-        public:
-            CastDeleter(Deleter deleter) : deleter_(deleter) {}
-            void operator()(T* ptr) {
-                deleter_(static_cast<U*>(ptr) )
-            }
-        };
+        // return true if this object is the only one holding its pointer.
+        bool unique();
+
+        //--------
+
+        // increase pool size for new and delete
+        // Also increases size of PooledMutex pool to match.
+        static void IncreasePoolSize(size_t numel);
+
+    private:
 
         // type of lock guard used to control mutex.
         typedef c11::lock_guard<PooledMutex> ListLock;
 
-        //------------
+        //---
 
-        // pointer to mutex (pointer makes it poolable and copyable/swapable.)
-        PooledMutex* mutex_ptr_;
+        // Add specified object after *this in its list
+        // (other must be empty)
+        void AddToList(SharedPointer& other);
 
-        // pointer to previous object in linked list of owners.
-        SharedPointer* prev_ptr_;
+        // remove object from list, return true if it was last element holding void_ptr,
+        // and void_ptr_ needs to be deleted.
+        void* RemoveFromList();
 
-        // pointer to next object in linked list of owners.
-        SharedPointer* next_ptr_;
-
-        // pointer to managed object.
-        element_type* obj_ptr_;
-
-        // function object called to delete obj_ptr_
-        Deleter deleter_;
-
-    };
+    }; //SharedPointer<T>
 
     // Equality comparison operators
     template<typename T>

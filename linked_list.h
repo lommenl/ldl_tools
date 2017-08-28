@@ -3,65 +3,71 @@
 #define LINKED_LIST_H_
 
 #include "pooled_new.h"
+#include "shared_pointer.h"
 
 namespace ldl {
 
     //===============
-    /// Class defining a pointer that allows it to be used in a LinkedList object.
-    template<typename T>
     class Linkable {
-    public:
-        Linkable() : next_ptr_(0) {}
     private:
-        /// allow LinkedList to access next_ptr_
-        template<typename U>
+        template<typename T>
         friend class LinkedList;
 
-        /// Pointer to next element in list.
-        T* next_ptr_;
+        SharedPointer<Linkable> next_;
+    };
+
+    //===============
+    /// base class for LinkedList that hold member variables.
+    class LinkedListBase : public PooledNew<LinkedListBase> {
+
+    protected:
+
+        typedef SharedPointer<Linkable> LinkablePointer;
+
+        // Shared pointer to first element in list
+        LinkablePointer begin_;
+
     };
 
     //===============
     /// Class defining a linked list of pointers to objects which inherit from class Linkabke<>.
     template<typename T>
-    class LinkedList : public PooledNew<int> {
-        // FIXME need to call PooledNew::SetElementSize(sizeof(LinkedList<T>)) manually
+    class LinkedList : public LinkedListBase {
     public:
 
-        /// Template class for defining iterator and const_iterator.
-        template<typename U>
-        class Iterator {
+        typedef SharedPointer<T> Pointer;
+
+        class const_iterator {
         public:
-            // default constructor
-            Iterator();
-            // construct from pointer
-            Iterator(U* ptr);
-            // copy constructor
-            Iterator(const Iterator& other);
-            // copy assignment operator
-            Iterator& operator=(const Iterator& other);
-            // dereference operator
-            U& operator*();
-            // derefernce operator
-            U* operator->();
-            // preincrement operator
-            Iterator& operator++();
-            // postincrement operator
-            Iterator& operator++(int);
-            // equality operator
-            bool operator==(const Iterator& other) const;
-            // inequality operator
-            bool operator!=(const Iterator& other) const;
+            const_iterator() : ptr_(0) {}
+            const_iterator(LinkablePointer ptr) : ptr_(ptr) {}
+            const_iterator(const const_iterator& other) : ptr_(other.ptr) {}
+            const_iterator& operator=(const const_iterator& other) { if (this != &other) { (ptr_ = other.ptr_); } return *this; }
+            const T& operator*() const { return *ptr_; }
+            const T* operator->() const { return ptr_->get(); }
+            const_iterator& operator++() { if (ptr_) { ptr_ = ptr->ptr_next_; } return *this; }
+            const_iterator operator++(int) { const_iterator retval = *this; operator++(); return this; }
+            bool operator==(const const_iterator& other) const { return (ptr_ = other.ptr_); }
+            bool operator!=(const const_iterator& other) const { return (ptr_ != other.ptr_); }
         private:
-            /// pointer to current Listable element in list
-            U* ptr_;
+            const LinkablePointer ptr_;
         };
 
-        // type defining iterator
-        typedef Iterator<T> iterator;
-
-        /// Type defining const_iterator
-        typedef Iterator<const T> const_iterator;
+        class iterator {
+        public:
+            iterator() : ptr_(0) {}
+            iterator(LinkablePointer ptr) : ptr_(ptr) {}
+            iterator(const iterator& other) : ptr_(other.ptr) {}
+            iterator& operator=(const iterator& other) { if (this != &other) { (ptr_ = other.ptr_); } return *this; }
+            T& operator*() const { return *ptr_; }
+            T* operator->() const { ptr_.get(); }
+            iterator& operator++() { if (ptr_) { ptr_ = ptr->ptr_next_; } return *this; }
+            iterator operator++(int) { iterator retval = *this; operator++(); return this; }
+            bool operator==(const iterator& other) const { return (ptr_ = other.ptr_); }
+            bool operator!=(const iterator& other) const { return (ptr_ != other.ptr_); }
+        private:
+            LinkablePointer ptr_;
+        };
 
         //---
 
@@ -71,11 +77,11 @@ namespace ldl {
         // copy constructor
         LinkedList(const LinkedList& other);
 
-        // copy assignment operator
-        LinkedList& operator=(const LinkedList& other);
-
         // destructor
         ~LinkedList();
+
+        // copy assignment
+        LinkedList& operator=(const LinkedList& other);
 
         // swap contents of two objects
         void swap(LinkedList& other);
@@ -88,6 +94,8 @@ namespace ldl {
 
         // return number of elements in list
         size_t size() const;
+
+        //---
 
         // return iterator to beginning of list
         iterator begin();
@@ -109,24 +117,19 @@ namespace ldl {
 
         // return reference to element at front of list
         T& front();
-        
+
         // return const reference to element at front of list
         T const& front() const;
 
-        // Insert a copy of val at the front of the list
-        void push_front(const T& val);
+        // return shared pointer to element at front of list
+        Pointer front_ptr();
 
         // insert the object referenced by ptr at the front of the list.
         // The list takes ownership of ptr, and deletes it when its element is removed from the list.
-        void push_front(T* ptr);
+        void push_front(Pointer ptr);
 
-        // remove the first element from the list.
+        // remove and delete the first element in the list.
         void pop_front();
-
-    private:
-
-        // pointer to first element in list
-        T* begin_;
 
     };
 

@@ -15,31 +15,6 @@ namespace c11 {
 namespace ldl {
 
     //-------------
-    template<typename T>
-    struct FutureState : public PooledNew<UnknownElementSize> {
-        // FIXME need to call PooledNew::SetElementSize(sizeof(FutureState<T>)) manually
-
-        // mutex for cv.wait()
-        c11::mutex mutex;
-
-        // synchronization condition_variable
-        c11::condition_variable cv;
-
-        // flag for detecting spurious cv wake ups.
-        bool notified;
-
-        // flag indicating that promise has set value (or is being destroyed).
-        bool value_set;
-
-        // shared value
-        T value;
-
-        // default constructor
-        FutureState();
-
-    };
-
-    //-------------
     // return type for Future::wait_for() and Future::wait_until()
     struct FutureStatus {
         enum type {
@@ -49,23 +24,44 @@ namespace ldl {
     };
 
     //-------------
+    struct FutureState : public PooledNew<FutureState> {
+        c11::mutex mutex;
+        c11::condition_variable cv;
+        bool promise_error;
+        void* value_ptr;
+        FutureState();
+    };
+
+    //-------------
+    class FutureBase : public PooledNew<FutureBase> {
+    protected:
+        FutureBase();
+        // shared pointer to FutureState shared with promise that created this
+        SharedPointer<FutureState> state_ptr_;
+    };
+
+    //-------------
     /// A class that can block execution until it receives a shared value set by a Promise object.
     template<typename T>
-    class Future : public PooledNew<int> {
-        // FIXME need to call PooledNew::SetElementSize(sizeof(Future<T>)) manually
+    class Future : public FutureBase {
     public:
-
-        // construct an empty object (no shared state).
+        // Default constructor (no shared state).
         Future();
 
         // move constructor 
         Future(Future&);
 
-        // move assignment operator
+        // Destructor
+        ~Future();
+
+        // Move assignment operator
         Future& operator=(Future&);
 
-        // allows us to move-assign and move-construct Future objects with a pre-C11 compiler.
+        // swap object states
         void swap(Future& other);
+
+        // reset object to a default constructed state
+        void reset();
 
         // Return true if this object has a shared state.
         bool valid() const;
@@ -75,17 +71,20 @@ namespace ldl {
         // Calling when this object is invalid results in undefined behavior.
         T get();
 
-        // Wait until the promise object that shares state with this object sets value and notifies the shared condition variable.
+        // Wait until the promise object that shares state with this object sets value
+        // and notifies the shared condition variable.
         // Calling when this object is invalid results in undefined behavior.
         void wait();
 
-        // Wait until the promise that shares state with this object sets value and notifies the shared condition variable,
+        // Wait until the promise that shares state with this object sets value and notifies
+        // the shared condition variable,
         // or until the specified time_point is reached.
         // Calling when this object is invalid results in undefined behavior.
         template<typename Clock, typename Duration>
         FutureStatus::type wait_until(const c11::chrono::time_point<Clock, Duration >& abs_time);
 
-        // Wait until the promise that shares state with this object sets value and notifies the shared condition variable,
+        // Wait until the promise that shares state with this object sets value and notifies
+        // the shared condition variable,
         // or until the specified duration elapses.
         // Calling when this object is invalid results in undefined behavior.
         template< typename Rep, typename Period>
@@ -97,31 +96,45 @@ namespace ldl {
         template<typename U>
         friend class Promise;
 
-        // Construct an object with the specified shared state.
-        Future(SharedPointer<FutureState<T>>& state_ptr);
+        // Construct a Future with the specified shared state
+        Future(SharedPointer<FutureState>& state_ptr);
 
-        //---
+    };
 
-        SharedPointer<FutureState<T>> state_ptr_;
+    //-------------
+    class PromiseBase : public PooledNew<PromiseBase> {
+    protected:
+        PromiseBase();
+       
+        bool future_constructed_;
+
+        SharedPointer<FutureState> state_ptr_;
 
     };
 
     //-------------
     template<typename T>
-    class Promise : public PooledNew<int> {
-        // FIXME need to call PooledNew::SetElementSize(sizeof(Promie<T>)) manually
-
+    class Promise : public PromiseBase {
     public:
 
         // default constructor
         Promise();
 
+        // move constructor
+        Promise(Promise&);
+
         // destroy a promise object
         ~Promise();
+
+        // move assignment
+        Promise& operator=(Promise&);
 
         // swap states of two objects.
         // allows us to move-assign and move-construct Future objects with a pre-C11 compiler.
         void swap(Promise& other);
+
+        // reset object to a default constructed state
+        void reset();
 
         // construct a Future object with the same shared state as this object.
         Future<T> get_future();
@@ -129,18 +142,7 @@ namespace ldl {
         // set the value of the shared state and notify the shared condition variable.
         void set_value(const T& value);
 
-    private:
-        // no copying
-        Promise(const Promise&); // = delete;
-        Promise& operator=(const Promise&); // = delete;
-
-        //---
-
-        SharedPointer<FutureState<T>> state_ptr_;
-
-        // true if a Future object with the same shared state as this object has been constructed.
-        bool future_constructed_;
-    };
+    }; //promise<T>
 
 } //namespace ldl
 
