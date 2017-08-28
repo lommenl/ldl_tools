@@ -22,8 +22,9 @@ BOOST_AUTO_TEST_CASE( linked_list_test )
         // let all pools grow as needed
         ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
 
-        // x = 4 bytes, next_ptr_ = 8 bytes + 4 bytes of alignment padding
-        BOOST_CHECK_EQUAL(sizeof(bar), 16);
+        // padded to 64-bit alignment
+        size_t sz = (sizeof(int) + sizeof(ldl::Linkable)+7)&~7;
+        BOOST_CHECK_EQUAL(sizeof(bar), sz);
 
         ldl::LinkedList<bar> blist;
 

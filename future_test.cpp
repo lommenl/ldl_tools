@@ -44,7 +44,9 @@ BOOST_AUTO_TEST_CASE( future_test )
 
         BOOST_CHECK_EQUAL(val, 1);
 
-        th.join();
+        if (th.joinable()) {
+            th.join();
+        }
 
         prom_ptr.reset();
         fut_ptr.reset();
@@ -61,7 +63,9 @@ BOOST_AUTO_TEST_CASE( future_test )
 
         BOOST_CHECK_EQUAL(val2, 2);
 
-        th2.join();
+        if (th2.joinable()) {
+            th2.join();
+        }
 
         std::cout << "done" << std::endl;
     }

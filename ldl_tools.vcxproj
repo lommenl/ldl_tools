@@ -156,7 +156,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pool.cpp" />
     <ClCompile Include="pooled_new_test.cpp" />
-    <ClCompile Include="pool_allocator.cpp" />
+    <ClCompile Include="pool_allocator_void.cpp" />
     <ClCompile Include="pool_allocator_test.cpp" />
     <ClCompile Include="shared_pointer_test.cpp" />
   </ItemGroup>

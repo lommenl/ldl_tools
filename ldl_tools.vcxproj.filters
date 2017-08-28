@@ -36,7 +36,7 @@
     <ClCompile Include="shared_pointer_test.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pool_allocator.cpp">
+    <ClCompile Include="pool_allocator_void.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

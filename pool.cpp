@@ -53,6 +53,9 @@ namespace ldl {
         block_size_ = block_size;
         growth_step_ = growth_step;
         tos_ = 0;
+        if (num_blocks) {
+            IncreaseSize(num_blocks);
+        }
     }
 
     //-----------------
