@@ -20,8 +20,6 @@ void promise_thread(ldl::Promise<int>* prom, int val) {
     prom->set_value(val);
 }
 
-#if 0 //FOOXXX
-
 BOOST_AUTO_TEST_SUITE(FUTURE)
 
 BOOST_AUTO_TEST_CASE( future_test )
@@ -75,5 +73,4 @@ BOOST_AUTO_TEST_CASE( future_test )
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-#endif //FOOXXX
 

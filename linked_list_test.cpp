@@ -11,7 +11,6 @@ struct bar : public ldl::Linkable, public ldl::PooledNew<bar> {
     int x;
 };
 
-#if 0 //FOOXXX
 BOOST_AUTO_TEST_SUITE(LINKED_LIST)
 
 BOOST_AUTO_TEST_CASE( linked_list_test )
@@ -31,7 +30,6 @@ BOOST_AUTO_TEST_CASE( linked_list_test )
         BOOST_CHECK_EQUAL(blist.size(), 0);
         BOOST_CHECK_EQUAL(blist.empty(), true);
 
-#if 1 //FOOXXX
         bar x1;
         x1.x = 10;
         blist.push_front(x1);
@@ -68,8 +66,6 @@ BOOST_AUTO_TEST_CASE( linked_list_test )
 
         BOOST_CHECK_EQUAL(blist.front().x, 13);
 
-#endif //FOOXXX
-
     }
     catch (const std::exception& ex) {
         BOOST_TEST_MESSAGE("exception in linked_list_test: " << ex.what());
@@ -77,5 +73,4 @@ BOOST_AUTO_TEST_CASE( linked_list_test )
 
 }
 BOOST_AUTO_TEST_SUITE_END()
-#endif //FOOXXX
 

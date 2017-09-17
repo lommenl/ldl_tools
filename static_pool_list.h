@@ -14,6 +14,12 @@ namespace ldl {
     class StaticPoolList {
     public:
 
+        // Reset static pool
+        static void Reset();
+
+        /// return true if pool_list[block_size] size exists.
+        static bool HasPool(size_t block_size);
+
         /// Return a reference to pool_list[block_size]
         /// Will create an empty pool with default_growth_step if it doesn't already exist.
         static Pool& GetPool(size_t block_size);
@@ -52,9 +58,6 @@ namespace ldl {
         static void Push(size_t block_size, void* ptr);
 
     private:
-
-        /// return true if pool_list[block_size] size exists.
-        static bool HasPool(size_t block_size);
 
         static c11::mutex mutex_;
 

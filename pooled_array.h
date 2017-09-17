@@ -117,6 +117,27 @@ namespace ldl {
 
     };
 
+    template<typename T,size_t N>
+    bool operator==(const PooledArray<T, N>& lhs, const PooledArray<T, N>& rhs);
+
+    template<typename T,size_t N>
+    bool operator!=(const PooledArray<T, N>& lhs, const PooledArray<T, N>& rhs);
+
+    template<typename T,size_t N>
+    bool operator<(const PooledArray<T, N>& lhs, const PooledArray<T, N>& rhs);
+
+    template<typename T,size_t N>
+    bool operator>(const PooledArray<T, N>& lhs, const PooledArray<T, N>& rhs);
+
+    template<typename T,size_t N>
+    bool operator<=(const PooledArray<T, N>& lhs, const PooledArray<T, N>& rhs);
+
+    template<typename T,size_t N>
+    bool operator>=(const PooledArray<T, N>& lhs, const PooledArray<T, N>& rhs);
+
+    template<typename T,size_t N>
+    std::ostream& operator<<(std::ostream& os, const PooledArray<T, N>& obj);
+
 } //namespace ldl
 
 #include "pooled_array.hpp"

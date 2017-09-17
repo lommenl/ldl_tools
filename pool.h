@@ -24,7 +24,9 @@ namespace ldl {
         // initialize a default constructed object
         void Initialize(size_t block_size, size_t num_blocks, int growth_step);
 
-        /// Increase stack_ size by num_blocks blocks.
+        // reset pool to a default state.
+        void Reset();
+
         void IncreaseSize(size_t num_blocks);
 
         /// Set number of blocks to automatically add to stack_ if it becomes empty.
@@ -59,6 +61,8 @@ namespace ldl {
         void Push(void* ptr);
 
     private:
+
+        /// Increase stack_ size by num_blocks blocks.
         // no copies allowed
         Pool(const Pool&) = delete;
         Pool& operator=(const Pool&) = delete;

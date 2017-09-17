@@ -8,6 +8,13 @@ namespace c11 {
 namespace ldl {
 
     //--------------
+    void StaticPoolList::Reset()
+    {
+        c11::lock_guard<c11::mutex> lock(mutex_);
+        pool_list_.Reset();
+    }
+
+    //--------------
     bool StaticPoolList::HasPool(size_t block_size)
     {
         c11::lock_guard<c11::mutex> lock(mutex_);

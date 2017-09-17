@@ -128,8 +128,8 @@ BOOST_AUTO_TEST_CASE(pool_list_test)
         plist.SetPoolGrowthStep(0,11);
         BOOST_CHECK_EQUAL(plist.GetPoolGrowthStep(0), 11);
         BOOST_CHECK_EQUAL(plist.GetPoolGrowthStep(3), 11);
-        BOOST_CHECK_EQUAL(plist.GetPoolGrowthStep(1), 1);
-        BOOST_CHECK_EQUAL(plist.GetPoolGrowthStep(10), 10);
+        BOOST_CHECK_EQUAL(plist.GetPoolGrowthStep(1), 11);
+        BOOST_CHECK_EQUAL(plist.GetPoolGrowthStep(10), 11);
 
         BOOST_CHECK_EQUAL(plist.HasPool(30), false);
         ldl::Pool& p30 = plist.GetPool(30);

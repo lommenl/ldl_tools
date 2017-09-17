@@ -8,20 +8,22 @@
 //-------------------------------------------
 
 struct foo : public ldl::PooledNew<foo> {
-    int x;
+    int64_t x;
 };
 
-#if 0 //FOOXXX
 BOOST_AUTO_TEST_SUITE(POOLED_NEW)
 BOOST_AUTO_TEST_CASE( pooled_new_test )
 {
     BOOST_TEST_MESSAGE("Starting pooled_new_test");
     try {
+        ldl::StaticPoolList::Reset();
 
         // let all pools grow as needed
         ldl::StaticPoolList::SetPoolGrowthStep(0, 10);
 
+        //except for the pool used by foo
         foo::SetPoolGrowthStep(1);
+        BOOST_CHECK_EQUAL(foo::GetPoolGrowthStep(), 1);
         BOOST_CHECK_EQUAL(foo::GetPoolGrowthStep(), 1);
 
         foo::IncreasePoolSize(1);
@@ -53,7 +55,7 @@ BOOST_AUTO_TEST_CASE( pooled_new_test )
         BOOST_CHECK_EQUAL(foo::GetPoolFree(), 1);
 
         {
-            ldl::SharedPointer<foo> px4(new foo());
+            ldl::SharedPointer<foo> px4(new foo()); //allocates space for foo
             px4->x = 44;
             BOOST_CHECK_EQUAL(px4->x, 44);
             BOOST_CHECK_EQUAL(px4.get(),px2);
@@ -73,6 +75,8 @@ BOOST_AUTO_TEST_CASE( pooled_new_test )
         //------------------
 
         // allocate space for 10 foo[20] arrays.
+        BOOST_CHECK_EQUAL(foo::GetArrayPoolSize(20), 0);
+        BOOST_CHECK_EQUAL(foo::GetArrayPoolFree(20), 0);
         foo::IncreaseArrayPoolSize(20, 10);
         BOOST_CHECK_EQUAL(foo::GetArrayPoolSize(20), 10);
         BOOST_CHECK_EQUAL(foo::GetArrayPoolFree(20), 10);
@@ -100,4 +104,3 @@ BOOST_AUTO_TEST_CASE( pooled_new_test )
 
 }
 BOOST_AUTO_TEST_SUITE_END()
-#endif //FOOXXX

@@ -21,6 +21,8 @@ namespace ldl {
 
         void swap(PoolList& other);
 
+        void Reset();
+
         // Return largest possible block_size that can be created in pool_list.
         size_t GetMaxPoolBlockSize() const;
 

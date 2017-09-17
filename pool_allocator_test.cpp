@@ -3,7 +3,6 @@
 #include "pool_allocator.h"
 #include "static_pool_list.h"
 
-#if 0 //FOOXXX
 BOOST_AUTO_TEST_SUITE(POOL_ALLOCATOR)
 
 BOOST_AUTO_TEST_CASE( pool_allocator_test )
@@ -43,4 +42,3 @@ BOOST_AUTO_TEST_CASE( pool_allocator_test )
 
 }
 BOOST_AUTO_TEST_SUITE_END()
-#endif //FOOXXX

@@ -26,9 +26,19 @@ namespace ldl {
     //--------------
     Pool::~Pool()
     {
+        Reset();
+    }
+
+    //-----------------
+    void Pool::Reset()
+    {
         while (!IsEmpty()) {
             delete[] Pop();
         }
+        block_size_ = 0;
+        growth_step_ = 0;
+        tos_ = 0;
+        stack_.clear();
     }
 
     //-----------------

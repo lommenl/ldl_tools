@@ -19,6 +19,13 @@ namespace ldl {
     }
 
     //--------------
+    void PoolList::Reset()
+    {
+        pool_map_.clear();
+        default_growth_step_ = 0;
+    }
+
+    //--------------
     size_t PoolList::GetMaxPoolBlockSize() const
     {
         return MAX_BLOCK_SIZE_;

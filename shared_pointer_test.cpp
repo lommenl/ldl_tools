@@ -5,7 +5,6 @@
 #include "pooled_mutex.h"
 #include "static_pool_list.h"
 
-#if 0 //FOOXXX
 BOOST_AUTO_TEST_SUITE(SHARED_POINTER)
 BOOST_AUTO_TEST_CASE(shared_pointer_test)
 {
@@ -168,4 +167,3 @@ BOOST_AUTO_TEST_CASE(shared_pointer_test)
     }
 }
 BOOST_AUTO_TEST_SUITE_END()
-#endif //FOOXXX
