@@ -1,67 +1,52 @@
-#include "pooled_new.h"
-
-#include "static_pool_list.h"
-
-#include <exception>
-
-namespace ldl {
-
     //---------------------
-    template<typename T>
-    void* PooledNew<T>::operator new(size_t n)
+    static void* operator new(size_t n)
     {
         // make sure we get expected size, otherwise, operator delete() won't work.
         if (n != element_size_) {
             throw std::bad_alloc();
         }
-        return StaticPoolList::Pop(element_size_);
+        void* ptr = StaticPoolList::Pop(element_size_);
+        return ptr;
     }
 
     //---------------------
-    template<typename T>
-    void PooledNew<T>::operator delete(void* ptr)
+    static void operator delete(void* ptr)
     {
         StaticPoolList::Push(element_size_, ptr);
     }
 
     //---------------------
-    template<typename T>
-    void PooledNew<T>::IncreasePoolSize(size_t num_blocks)
+    static void IncreasePoolSize(size_t num_blocks)
     {
         StaticPoolList::IncreasePoolSize(element_size_, num_blocks);
     }
 
     //---------------------
-    template<typename T>
-    void PooledNew<T>::SetPoolGrowthStep(int growth_step)
+    static void SetPoolGrowthStep(int growth_step)
     {
         StaticPoolList::SetPoolGrowthStep(element_size_, growth_step);
     }
 
     //---------------------
-    template<typename T>
-    int PooledNew<T>::GetPoolGrowthStep()
+    static int GetPoolGrowthStep()
     {
         return StaticPoolList::GetPoolGrowthStep(element_size_);
     }
 
     //---------------------
-    template<typename T>
-    size_t PooledNew<T>::GetPoolFree()
+    static size_t GetPoolFree()
     {
         return StaticPoolList::GetPoolFree(element_size_);
     }
 
     //---------------------
-    template<typename T>
-    size_t PooledNew<T>::GetPoolSize()
+    static size_t GetPoolSize()
     {
         return StaticPoolList::GetPoolSize(element_size_);
     }
 
     //---------------------
-    template<typename T>
-    bool PooledNew<T>::PoolIsEmpty()
+    static bool PoolIsEmpty()
     {
         return StaticPoolList::PoolIsEmpty(element_size_);
     }
@@ -69,8 +54,7 @@ namespace ldl {
     //==================
 
     //---------------------
-    template<typename T>
-    void* PooledNew<T>::operator new[](size_t n)
+    static void* operator new[](size_t n)
     {
         // increase block_size to include an extra size_t to hold block_size.
         size_t block_size = sizeof(size_t) + n;
@@ -81,8 +65,7 @@ namespace ldl {
     }
 
         //---------------------
-        template<typename T>
-    void PooledNew<T>::operator delete[](void* ptr)
+    static void operator delete[](void* ptr)
     {
         // set ptr to true start of block (before ptr)
         size_t* block_size_ptr = static_cast<size_t*>(ptr) - 1;
@@ -90,8 +73,7 @@ namespace ldl {
     }
 
         //---------------------
-        template<typename T>
-    void PooledNew<T>::IncreaseArrayPoolSize(size_t numel, size_t num_blocks)
+    static void IncreaseArrayPoolSize(size_t numel, size_t num_blocks)
     {
         // increase external block_size to include block_size_ptr
         size_t block_size = sizeof(size_t) + numel * element_size_;
@@ -99,8 +81,7 @@ namespace ldl {
     }
 
     //---------------------
-    template<typename T>
-    void PooledNew<T>::SetArrayPoolGrowthStep(size_t numel, int growth_step)
+    static void SetArrayPoolGrowthStep(size_t numel, int growth_step)
     {
         // increase external block_size to include block_size_ptr
         size_t block_size = sizeof(size_t) + numel * element_size_;
@@ -108,8 +89,7 @@ namespace ldl {
     }
 
     //---------------------
-    template<typename T>
-    int PooledNew<T>::GetArrayPoolGrowthStep(size_t numel)
+    static int GetArrayPoolGrowthStep(size_t numel)
     {
         // increase external block_size to include block_size_ptr
         size_t block_size = sizeof(size_t) + numel * element_size_;
@@ -117,8 +97,7 @@ namespace ldl {
     }
 
     //---------------------
-    template<typename T>
-    size_t PooledNew<T>::GetArrayPoolFree(size_t numel)
+    static size_t GetArrayPoolFree(size_t numel)
     {
         // increase external block_size to include block_size_ptr
         size_t block_size = sizeof(size_t) + numel * element_size_;
@@ -126,8 +105,7 @@ namespace ldl {
     }
 
     //---------------------
-    template<typename T>
-    size_t PooledNew<T>::GetArrayPoolSize(size_t numel)
+    static size_t GetArrayPoolSize(size_t numel)
     {
         // increase external block_size to include block_size_ptr
         size_t block_size = sizeof(size_t) + numel * element_size_;
@@ -135,16 +113,9 @@ namespace ldl {
     }
 
     //---------------------
-    template<typename T>
-    bool PooledNew<T>::GetArrayPoolIsEmpty(size_t numel)
+    static bool GetArrayPoolIsEmpty(size_t numel)
     {
         // increase external block_size to include block_size_ptr
         size_t block_size = sizeof(size_t) + numel * element_size_;
         return StaticPoolList::GetPoolIsEmpty(block_size);
     }
-
-    //---------------------
-    template<typename T>
-    size_t PooledNew<T>::element_size_ = sizeof(T);
-
-} //namespace ldl

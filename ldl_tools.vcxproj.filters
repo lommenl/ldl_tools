@@ -36,7 +36,22 @@
     <ClCompile Include="shared_pointer_test.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="pool_allocator_void.cpp">
+    <ClCompile Include="pool_list.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="static_pool_list.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pooled_array_test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pool_list_test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pool_test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="static_pool_list_test.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -71,11 +86,28 @@
     <ClInclude Include="pooled_new.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="pooled_new.hpp">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="pooled_mutex.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="linkable.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pool_list.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="static_pool_list.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pooled_array.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pooled_array.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pooled_new.inc">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

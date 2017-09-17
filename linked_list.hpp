@@ -5,13 +5,13 @@ namespace ldl {
     //---------------
     template<typename T>
     LinkedList<T>::LinkedList()
-        : LinkedListBase()
+        : begin_(0)
     {}
 
     //---------------
     template<typename T>
     LinkedList<T>::LinkedList(const LinkedList& other)
-        : LinkedListBase()
+        : begin_(0)
     {
         operator=(other);
     }
@@ -29,8 +29,16 @@ namespace ldl {
     {
         if (this != &other) {
             clear();
+            LinkedList tmp;
+            //copy elements from other into tmp. (tmp is in reverse order)
             for (const_iterator it = other.begin(); it != other.end(); ++it) {
-                push_front( it->front_ptr() );
+                tmp.push_front( *it );
+            }
+            // move pointers in tmp into *this (*this is in original order)
+            for (LinkedList* ptr = tmp.begin_; ptr != 0; ptr = next_linkable) {
+                // push_front(ptr) clobbers ptr->next_linkable_
+                LinkedList* next_linkable = ptr->next_linkable_;
+                push_front(ptr);
             }
         }
         return *this;
@@ -58,7 +66,7 @@ namespace ldl {
     template<typename T>
     bool LinkedList<T>::empty() const
     {
-        return (bool)begin_;
+        return (begin_ == 0);
     }
 
     //---------------
@@ -66,8 +74,7 @@ namespace ldl {
     size_t LinkedList<T>::size() const
     {
         size_t retval = 0;
-        // use pointer to SharedPointer to avoid making temporary copies of SharedPointers
-        for (const LinkablePointer* ptrptr = &begin_; (bool)(*ptrptr) ; ptrptr = &(*ptrptr)->next_) {
+        for ( const_iterator it = begin(); it != end(); ++it) {
             ++retval;
         }
         return retval;
@@ -118,40 +125,47 @@ namespace ldl {
     //---------------
     template<typename T>
     T& LinkedList<T>::front() {
-        return *front_ptr();
+        return *static_cast<T*>(begin_);
     }
 
     //---------------
     template<typename T>
     T const& LinkedList<T>::front() const
     {
-        return *front_ptr();
+        return *static_cast<T*>(begin_);
     }
 
     //---------------
     template<typename T>
-    typename LinkedList<T>::Pointer LinkedList<T>::front_ptr()
+    void LinkedList<T>::push_front(T* ptr)
     {
-        return dynamic_cast<Pointer>(begin_);
+        if (!ptr) {
+            throw std::runtime_error("invalid pointer argument");
+        }
+        ptr->next_linkable_ = begin_;
+        begin_ = ptr;
     }
 
     //---------------
     template<typename T>
-    void LinkedList<T>::push_front(Pointer ptr)
+    void LinkedList<T>::push_front(const T& ptr)
     {
-        LinkablePointer tmp(ptr); //new non-empty LinkablePointer (tmp = ptr, ptr->next_= 0 )
-        begin_.swap(tmp->next_); // (ptr->next_ = begin_; begin_ = 0
-        begin_.swap(tmp); //( begin_ = ptr; tmp = 0
+        push_front(new T(ptr));
     }
 
     //---------------
     template<typename T>
     void LinkedList<T>::pop_front()
     {
-        LinkablePointer tmp; // new empty LinkablePointer (tmp = 0)
-        tmp.swap(begin_->next_); // (tmp = begin_->next; begin_->next = 0) 
-        begin_.swap(tmp); // begin_ = begin_->next_; tmp = old_begin
-        tmp.reset(); //(tmp = 0); // reset old_begin
+        if (begin_) {
+            T* ptr = static_cast<T*>(begin_);
+            begin_ = begin_->next_linkable_;
+            delete ptr;
+        }
     }
+
+    //-----------------
+    template<typename T>
+    const size_t LinkedList<T>::element_size_ = sizeof(LinkedList<T>);
 
 } //namespasce ldl

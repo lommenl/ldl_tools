@@ -3,21 +3,17 @@
 #include "shared_pointer.h"
 
 #include "pooled_mutex.h"
-#include "pool_allocator.h"
+#include "static_pool_list.h"
 
-#include <iostream>
-
-//-------------------------------------------
+#if 0 //FOOXXX
+BOOST_AUTO_TEST_SUITE(SHARED_POINTER)
 BOOST_AUTO_TEST_CASE(shared_pointer_test)
 {
+    BOOST_TEST_MESSAGE("Starting shared_ptr_test");
 
     try {
-        std::cout << "========================" << std::endl;
-        std::cout << "Starting shared_ptr_test" << std::endl;
-        std::cout << "========================" << std::endl;
-
         // allow all pools to grow automatically
-        ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
+        ldl::StaticPoolList::SetPoolGrowthStep(0, 10);
 
         // default constructor
         ldl::SharedPointer<int> s1;
@@ -166,10 +162,10 @@ BOOST_AUTO_TEST_CASE(shared_pointer_test)
         // operator<=(lhs,rhs);
         // operator=>(lhs,rhs);
 
-        std::cout << "done" << std::endl;
-
     }
     catch (const std::exception& ex) {
-        std::cout << "exception in shared_pointer_test: " << ex.what() << std::endl;
+        BOOST_TEST_MESSAGE("exception in shared_pointer_test: " << ex.what());
     }
 }
+BOOST_AUTO_TEST_SUITE_END()
+#endif //FOOXXX

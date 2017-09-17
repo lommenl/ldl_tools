@@ -7,31 +7,38 @@
 namespace ldl {
 
     //---------------
-    FutureState::FutureState()
-        : promise_error(false)
-        , value_ptr(0)
+    template<typename T>
+    FutureState<T>::FutureState()
+        : notified(false)
+        , promise_error(false)
     {
     }
 
     //---------------
-    FutureBase::FutureBase()
+    template<typename T>
+    FutureState<T>::~FutureState()
+    {
+        notified = false;
+        //NOTHING
+    }
+
+    //---------------
+    template<typename T>
+    const size_t FutureState<T>::element_size_ = sizeof(FutureState<T>);
+
+    //---------------
+    template<typename T>
+    Future<T>::Future()
         : state_ptr_(0)
     {
     }
 
     //---------------
     template<typename T>
-    Future<T>::Future()
-        : FutureBase()
-    {
-    }
-
-    //---------------
-    template<typename T>
     Future<T>::Future(Future& other)
-        : FutureBase()
+        : state_ptr_(0)
     {
-        swap(other); // move ShredPointer
+        swap(other); // move
     }
 
     //---------------
@@ -47,7 +54,7 @@ namespace ldl {
     {
         if (this != &other) {
             reset();
-            swap(other); // move SharedPointer
+            swap(other); // move
         }
         return *this;
     }
@@ -64,11 +71,6 @@ namespace ldl {
     template<typename T>
     void Future<T>::reset()
     {
-        // if necessary, destroy state_ptr_->value_ptr
-        if (state_ptr_ && state_ptr_->value_ptr) {
-            delete static_cast<T*>(state_ptr_->value_ptr);
-            state_ptr_->value_ptr = 0;
-        }
         state_ptr_.reset();
     }
 
@@ -89,7 +91,7 @@ namespace ldl {
         if (state_ptr_->promise_error) { // if woken because Promise was destroyed
             throw std::runtime_error("promise was destroyed before setting value,");
         }
-        return *static_cast<T*>(state_ptr_->value_ptr);
+        return state_ptr_->value;
     }
 
     //---------------
@@ -100,7 +102,7 @@ namespace ldl {
             throw std::runtime_error("future is not valid");
         }
         c11::unique_lock<c11::mutex> lock(state_ptr_->mutex);
-        while (!state_ptr_->value_ptr) { //ignore spurious wake-ups
+        while (!state_ptr_->notified) { //ignore spurious wake-ups
             state_ptr_->cv.wait(lock);
         }
     }
@@ -115,7 +117,7 @@ namespace ldl {
             throw std::runtime_error("future is not valid");
         }
         c11::unique_lock<c11::mutex> lock(state_ptr_->mutex);
-        while (!state_ptr_->value_ptr) { //ignore spurious wake-ups
+        while (!state_ptr_->notified) { //ignore spurious wake-ups
             if (state_ptr_->cv.wait_until(lock, abs_time) == c11::cv_status::timeout) {
                 retval = FutureStatus::timeout;
                 break; //stop waiting
@@ -134,32 +136,31 @@ namespace ldl {
 
     //---------------
     template<typename T>
-    Future<T>::Future(SharedPointer<FutureState>& state_ptr)
-        : FutureBase()
-    {
-        state_ptr_ = state_ptr; // copy sharedPointer
-    }
-
-    //==========================
-
-    //---------------
-    PromiseBase::PromiseBase()
-        : future_constructed_(false)
+    Future<T>::Future(SharedPointer<FutureState<T>>& state_ptr)
+        : state_ptr_(state_ptr)
     {
     }
 
     //---------------
     template<typename T>
+    const size_t Future<T>::element_size_ = sizeof(Future<T>);
+
+    //==========================
+
+    //---------------
+    template<typename T>
     Promise<T>::Promise()
-        : PromiseBase()
+        : future_constructed_(false)
+        , state_ptr_(0)
     {
     }
     //---------------
     template<typename T>
     Promise<T>::Promise(Promise& other)
-        : PromiseBase()
+        : future_constructed_(false)
+        , state_ptr_(0)
     {
-        swap(other); // move SharedPointer
+        swap(other); // move
     }
 
     //---------------
@@ -175,7 +176,7 @@ namespace ldl {
     {
         if (this != &other) {
             reset();
-            swap(other); // move SharedPointer
+            swap(other); // move
         }
         return *this;
     }
@@ -199,7 +200,7 @@ namespace ldl {
             state_ptr_->promise_error = true;
         } // unlock before calling set_value
         // if necessary, wake promise
-        if (future_constructed_ && state_ptr_ && !state_ptr_->value_ptr) {
+        if (future_constructed_ && state_ptr_ && !state_ptr_->notified) {
             set_value(T());
         }
         state_ptr_.reset();
@@ -214,7 +215,7 @@ namespace ldl {
             throw std::runtime_error("Future already constructed");
         }
         if (!state_ptr_) {
-            state_ptr_.reset(new FutureState());
+            state_ptr_.reset(new FutureState<T>());
         }
         return Future<T>(state_ptr_); // copy SharedPointer to future
     }
@@ -223,14 +224,19 @@ namespace ldl {
     template<typename T>
     void Promise<T>::set_value(const T& value) {
         if (!state_ptr_) {
-            state_ptr_.reset(new FutureState());
+            state_ptr_.reset(new FutureState<T>());
         }
         c11::lock_guard<c11::mutex> lock(state_ptr_->mutex);
-        if (state_ptr_->value_ptr) {
+        if (state_ptr_->notified) {
             throw std::runtime_error("value already set");
         }
-        state_ptr_->value_ptr = new T(value);
+        state_ptr_->value = value;
+        state_ptr_->notified = true;
         state_ptr_->cv.notify_one();
     }
+
+    //---------------
+    template<typename T>
+    const size_t Promise<T>::element_size_ = sizeof(Promise<T>);
 
 } //namespace ldl

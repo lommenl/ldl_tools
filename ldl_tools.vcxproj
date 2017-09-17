@@ -84,6 +84,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <AdditionalLibraryDirectories>D:\Users\Layne\Workspace\boost_1_65_0\stage\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <HeapReserveSize>10000000</HeapReserveSize>
+      <StackReserveSize>10000000</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -98,6 +100,8 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <AdditionalLibraryDirectories>D:\Users\Layne\Workspace\boost_1_65_0\stage\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <HeapReserveSize>10000000</HeapReserveSize>
+      <StackReserveSize>10000000</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -116,6 +120,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>D:\Users\Layne\Workspace\boost_1_65_0\stage\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <HeapReserveSize>10000000</HeapReserveSize>
+      <StackReserveSize>10000000</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -134,31 +140,45 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <AdditionalLibraryDirectories>D:\Users\Layne\Workspace\boost_1_65_0\stage\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <HeapReserveSize>10000000</HeapReserveSize>
+      <StackReserveSize>10000000</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="linkable.h" />
     <ClInclude Include="linked_list.h" />
     <ClInclude Include="linked_list.hpp" />
     <ClInclude Include="pool.h" />
+    <ClInclude Include="pooled_array.h" />
+    <ClInclude Include="pooled_array.hpp" />
     <ClInclude Include="pooled_mutex.h" />
     <ClInclude Include="pooled_new.h" />
-    <ClInclude Include="pooled_new.hpp" />
     <ClInclude Include="pool_allocator.h" />
     <ClInclude Include="pool_allocator.hpp" />
     <ClInclude Include="future.h" />
     <ClInclude Include="future.hpp" />
+    <ClInclude Include="pool_list.h" />
     <ClInclude Include="shared_pointer.h" />
     <ClInclude Include="shared_pointer.hpp" />
+    <ClInclude Include="static_pool_list.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="future_test.cpp" />
     <ClCompile Include="linked_list_test.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="pool.cpp" />
+    <ClCompile Include="pooled_array_test.cpp" />
     <ClCompile Include="pooled_new_test.cpp" />
-    <ClCompile Include="pool_allocator_void.cpp" />
     <ClCompile Include="pool_allocator_test.cpp" />
+    <ClCompile Include="pool_list.cpp" />
+    <ClCompile Include="pool_list_test.cpp" />
+    <ClCompile Include="pool_test.cpp" />
     <ClCompile Include="shared_pointer_test.cpp" />
+    <ClCompile Include="static_pool_list.cpp" />
+    <ClCompile Include="static_pool_list_test.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pooled_new.inc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

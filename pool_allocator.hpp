@@ -38,7 +38,7 @@ namespace ldl {
     template<typename T>
     size_t PoolAllocator<T>::max_size() const
     {
-        return PoolAllocator<void>::GetMaxPoolBlockSize() / sizeof(T);
+        return StaticPoolList::GetMaxPoolBlockSize() / sizeof(T);
     }
 
     //--------------
@@ -65,7 +65,7 @@ namespace ldl {
         if (numel == 0) {
             throw std::bad_alloc();
         }
-        return static_cast<T*>(PoolAllocator<void>::Pop(numel * sizeof(T)));
+        return static_cast<T*>(StaticPoolList::Pop(numel * sizeof(T)));
     }
 
     //--------------
@@ -73,7 +73,7 @@ namespace ldl {
     void PoolAllocator<T>::deallocate(T* ptr, size_t numel)
     {
         if (ptr && numel) {
-            PoolAllocator<void>::Push(numel * sizeof(T), static_cast<void*>(ptr));
+            StaticPoolList::Push(numel * sizeof(T), static_cast<void*>(ptr));
         }
     }
 

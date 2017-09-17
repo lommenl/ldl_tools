@@ -1,9 +1,10 @@
 #pragma once
-#ifndef  PROMISE_FUTURE_H_
-#define  PROMISE_FUTURE_H_
+#ifndef  LDL_FUTURE_H_
+#define  LDL_FUTURE_H_
 
 #include "pooled_new.h"
 #include "shared_pointer.h"
+#include "linkable.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -24,31 +25,29 @@ namespace ldl {
     };
 
     //-------------
-    struct FutureState : public PooledNew<FutureState> {
+    template<typename T>
+    struct FutureState {
         c11::mutex mutex;
         c11::condition_variable cv;
+        bool notified;
         bool promise_error;
-        void* value_ptr;
+        T value;
         FutureState();
-    };
-
-    //-------------
-    class FutureBase : public PooledNew<FutureBase> {
-    protected:
-        FutureBase();
-        // shared pointer to FutureState shared with promise that created this
-        SharedPointer<FutureState> state_ptr_;
+        ~FutureState();
+        //--
+        static const size_t element_size_;
+#include "pooled_new.inc"
     };
 
     //-------------
     /// A class that can block execution until it receives a shared value set by a Promise object.
     template<typename T>
-    class Future : public FutureBase {
+    class Future : public Linkable {
     public:
         // Default constructor (no shared state).
         Future();
 
-        // move constructor 
+        // move constructor
         Future(Future&);
 
         // Destructor
@@ -97,24 +96,24 @@ namespace ldl {
         friend class Promise;
 
         // Construct a Future with the specified shared state
-        Future(SharedPointer<FutureState>& state_ptr);
+        Future(SharedPointer<FutureState<T>>& state_ptr);
 
-    };
+        //---
 
-    //-------------
-    class PromiseBase : public PooledNew<PromiseBase> {
-    protected:
-        PromiseBase();
-       
-        bool future_constructed_;
+        // shared pointer to FutureState shared with promise that created this
+        SharedPointer<FutureState<T>> state_ptr_;
 
-        SharedPointer<FutureState> state_ptr_;
+        //---
 
-    };
+        static const size_t element_size_;
+    public:
+#include "pooled_new.inc"
+
+    }; //Future<T>
 
     //-------------
     template<typename T>
-    class Promise : public PromiseBase {
+    class Promise : public Linkable {
     public:
 
         // default constructor
@@ -142,10 +141,22 @@ namespace ldl {
         // set the value of the shared state and notify the shared condition variable.
         void set_value(const T& value);
 
+    private:
+
+        bool future_constructed_;
+
+        SharedPointer<FutureState<T>> state_ptr_;
+
+        //---
+
+        static const size_t element_size_;
+    public:
+#include "pooled_new.inc"
+
     }; //promise<T>
 
 } //namespace ldl
 
 #include "future.hpp"
 
-#endif //!PROMISE_FUTURE_H_
+#endif //!LDL_FUTURE_H_

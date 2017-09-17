@@ -1,8 +1,9 @@
 #pragma once
-#ifndef POOLED_MUTEX_H_
-#define POOLED_MUTEX_H_
+#ifndef LDL_POOLED_MUTEX_H_
+#define LDL_POOLED_MUTEX_H_
 
 #include "pooled_new.h"
+#include "linkable.h"
 
 #include <mutex>
 namespace c11 {
@@ -13,8 +14,8 @@ namespace ldl {
 
     // add Pool allocators to the standard mutex type.
     // default constructors, etc. are all good
-    class PooledMutex : public c11::mutex, public PooledNew<PooledMutex> {};
+    class PooledMutex : public c11::mutex, public Linkable, public PooledNew<PooledMutex> {};
 
 } //namespace ldl
 
-#endif //! POOLED_MUTEX_
+#endif //! LDL_POOLED_MUTEX_

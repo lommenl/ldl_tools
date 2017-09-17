@@ -3,7 +3,7 @@
 #include "future.h"
 
 #include "pooled_mutex.h"
-#include "pool_allocator.h"
+#include "static_pool_list.h"
 
 #include <thread>
 #include <functional>
@@ -11,7 +11,6 @@ namespace c11 {
     using namespace std;
 }
 
-#include <iostream>
 #include <vector>
 
 //-------------------------------------------
@@ -21,20 +20,22 @@ void promise_thread(ldl::Promise<int>* prom, int val) {
     prom->set_value(val);
 }
 
+#if 0 //FOOXXX
+
+BOOST_AUTO_TEST_SUITE(FUTURE)
+
 BOOST_AUTO_TEST_CASE( future_test )
 {
+    BOOST_TEST_MESSAGE("Starting future_test");
     try {
 
-        std::cout << "============================" << std::endl;
-        std::cout << "Starting future_test" << std::endl;
-        std::cout << "============================" << std::endl;
-
         // let all pools grow as needed
-        ldl::PoolAllocator<void>::SetPoolGrowthStep(0, 10);
+        ldl::StaticPoolList::SetPoolGrowthStep(0, 10);
 
         ldl::SharedPointer<ldl::Promise<int>> prom_ptr(new ldl::Promise<int>());
 
         ldl::SharedPointer<ldl::Future<int>> fut_ptr(new ldl::Future<int>());
+
         *fut_ptr = prom_ptr->get_future();
 
         // spawn thread
@@ -67,9 +68,12 @@ BOOST_AUTO_TEST_CASE( future_test )
             th2.join();
         }
 
-        std::cout << "done" << std::endl;
     }
     catch (const std::exception& ex) {
-        std::cout << "exception in future-test: " << ex.what() << std::endl;
+        BOOST_TEST_MESSAGE("exception in future-test: " << ex.what());
     }
 }
+
+BOOST_AUTO_TEST_SUITE_END()
+#endif //FOOXXX
+
